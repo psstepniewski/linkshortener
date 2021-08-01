@@ -1,0 +1,13 @@
+linkshortener {
+    db {
+        host = "localhost"
+        name = "dbname"
+        port = "5432"
+        username = "username"
+        password = "password"
+    }
+}
+
+include "0_play.conf"
+include "1_akka-persistence.conf"
+include "2_flyway.conf"
