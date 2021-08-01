@@ -15,4 +15,5 @@ dist
 /.settings
 
 conf/application.conf
+*/http-client.private.env.json
 .bsp/
