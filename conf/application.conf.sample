@@ -6,6 +6,8 @@ linkshortener {
         username = "username"
         password = "password"
     }
+
+    shortLink.domain = "http://localhost:9000"
 }
 
 include "0_play.conf"
