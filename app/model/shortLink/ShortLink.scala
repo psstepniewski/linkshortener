@@ -28,10 +28,10 @@ object ShortLink {
   }
   sealed trait Event extends CborSerializable
   object Events {
-    case class Created(shortLinkId: String) extends Event
+    case class Created(shortLinkId: String, shortLinkDomain: String, shortLinkUrl: String, timestamp: Instant = Instant.now()) extends Event
   }
 
-  case class State(shortLinkId: String, shortLinkDomain: String, shortLinkUrl: String, createdTimestamp: Instant)
+  case class State(shortLinkId: String, shortLinkDomain: String, shortLinkUrl: String)
 
   sealed trait Entity {
     def state: State
@@ -45,7 +45,9 @@ object ShortLink {
 
     override def applyCommand(cmd: Command)(implicit context: ActorContext[Command]): ReplyEffect[Event, Entity] = cmd match {
       case c: Create =>
-        Effect.persist(Events.Created(id)).thenReply(c.replyTo)(_ => Create.Results.Created)
+        val domain = config.getString("linkshortener.shortLink.domain")
+        val url = s"$domain/short-links/${id}"
+        Effect.persist(Events.Created(id, domain, url)).thenReply(c.replyTo)(_ => Create.Results.Created)
       case c =>
         context.log.warn("{}[id={}, state=Empty] unknown command[{}].", entityType, id, c)
         Effect.noReply
@@ -53,8 +55,7 @@ object ShortLink {
 
     override def applyEvent(entity: Entity, event: Event)(implicit context: ActorContext[Command]): Entity = event match {
       case e: Created =>
-        val domain = config.getString("linkshortener.shortLink.domain")
-        ShortLink(e.shortLinkId, State(e.shortLinkId, domain, s"$domain/short-links/${e.shortLinkId}", Instant.now()), config)
+        ShortLink(e.shortLinkId, State(e.shortLinkId, e.shortLinkDomain, e.shortLinkUrl), config)
       case e =>
         context.log.warn(s"{}[id={}, state=Empty] received unexpected event[{}]", entityType, id, e)
         entity

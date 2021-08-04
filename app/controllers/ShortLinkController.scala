@@ -23,7 +23,7 @@ class ShortLinkController @Inject()(cc: ControllerComponents, actorSystem: Actor
   implicit val scheduler: Scheduler = actorSystem.toTyped.scheduler
 
   def test: Action[AnyContent] = Action.async {
-    val id = "unique-test"//IdGenerator.base58Id()
+    val id = IdGenerator.base58Id()
     val ref = actorSystem.spawn(ShortLink(id, config), id)
     ref.ask(v => ShortLink.Commands.Create(v))
       .map{
