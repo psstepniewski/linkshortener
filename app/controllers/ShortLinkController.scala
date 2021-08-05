@@ -27,7 +27,7 @@ class ShortLinkController @Inject()(cc: ControllerComponents, actorSystem: Actor
     val ref = actorSystem.spawn(ShortLink(id, config), id)
     ref.ask(v => ShortLink.Commands.Create(v))
       .map{
-        case ShortLink.Commands.Create.Results.Created => Accepted(id)
+        case v: ShortLink.Commands.Create.Results.Created => Accepted(v.shortLinkUrl)
         case ShortLink.Commands.Create.Results.AlreadyExists => InternalServerError(id)
         case _ => InternalServerError
       }
