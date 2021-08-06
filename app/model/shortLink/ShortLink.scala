@@ -17,7 +17,7 @@ object ShortLink {
 
   sealed trait Command extends CborSerializable
   object Commands {
-    case class Create(replyTo: ActorRef[Create.Result]) extends Command
+    case class Create(originalLinkUrl: String, replyTo: ActorRef[Create.Result]) extends Command
     case object Create {
       sealed trait Result extends CborSerializable
       object Results {
@@ -28,7 +28,7 @@ object ShortLink {
   }
   sealed trait Event extends CborSerializable
   object Events {
-    case class Created(shortLinkId: String, shortLinkDomain: String, shortLinkUrl: String, timestamp: Instant = Instant.now()) extends Event
+    case class Created(shortLinkId: String, shortLinkDomain: String, shortLinkUrl: String, originalLinkUrl: String, timestamp: Instant = Instant.now()) extends Event
   }
 
   case class State(shortLinkId: String, shortLinkDomain: String, shortLinkUrl: String)
@@ -47,7 +47,7 @@ object ShortLink {
       case c: Create =>
         val domain = config.getString("linkshortener.shortLink.domain")
         val url = s"$domain/short-links/${id}"
-        Effect.persist(Events.Created(id, domain, url)).thenReply(c.replyTo)(_ => Create.Results.Created(url))
+        Effect.persist(Events.Created(id, domain, url, c.originalLinkUrl)).thenReply(c.replyTo)(_ => Create.Results.Created(url))
       case c =>
         context.log.warn("{}[id={}, state=Empty] unknown command[{}].", entityType, id, c)
         Effect.noReply
