@@ -29,7 +29,7 @@ object ShortLink {
     case object GetOriginalLink {
       sealed trait Result extends CborSerializable
       object Results {
-        case class OriginalLink(originalLink: String) extends Result
+        case class OriginalLink(originalLinkUrl: String) extends Result
       }
     }
   }
@@ -38,7 +38,7 @@ object ShortLink {
     case class Created(shortLinkId: String, shortLinkDomain: String, shortLinkUrl: String, originalLinkUrl: String, timestamp: Instant = Instant.now()) extends Event
   }
 
-  case class State(shortLinkId: String, shortLinkDomain: String, shortLinkUrl: String, originalUrl: String)
+  case class State(shortLinkId: String, shortLinkDomain: String, shortLinkUrl: String, originalLinkUrl: String)
 
   sealed trait Entity {
     def state: State
@@ -62,7 +62,7 @@ object ShortLink {
 
     override def applyEvent(entity: Entity, event: Event)(implicit context: ActorContext[Command]): Entity = event match {
       case e: Created =>
-        ShortLink(e.shortLinkId, State(e.shortLinkId, e.shortLinkDomain, e.shortLinkUrl), config)
+        ShortLink(e.shortLinkId, State(e.shortLinkId, e.shortLinkDomain, e.shortLinkUrl, e.originalLinkUrl), config)
       case e =>
         context.log.warn(s"{}[id={}, state=Empty] received unexpected event[{}]", entityType, id, e)
         entity
@@ -75,7 +75,7 @@ object ShortLink {
       case c: Create =>
         Effect.reply(c.replyTo)(Create.Results.AlreadyExists)
       case c: GetOriginalLink =>
-        Effect.reply(c.replyTo)(GetOriginalLink.Results.OriginalLink(state.))
+        Effect.reply(c.replyTo)(GetOriginalLink.Results.OriginalLink(state.originalLinkUrl))
       case c =>
         context.log.warn("{}[id={}] unknown command[{}].", entityType, id, c)
         Effect.noReply

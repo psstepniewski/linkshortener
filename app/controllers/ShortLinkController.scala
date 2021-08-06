@@ -10,12 +10,12 @@ import controllers.ShortLinkController.PostShortLinks
 import model.IdGenerator
 import model.shortLink.ShortLink
 import play.api.Logging
-import play.api.libs.json.{JsError, JsSuccess, JsValue, Json, Reads}
+import play.api.libs.json._
 import play.api.mvc.{AbstractController, Action, AnyContent, ControllerComponents}
 
 import javax.inject.{Inject, Singleton}
-import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration.DurationInt
+import scala.concurrent.{ExecutionContext, Future}
 
 @Singleton
 class ShortLinkController @Inject()(cc: ControllerComponents, actorSystem: ActorSystem, config: Config)(implicit ec: ExecutionContext)
@@ -28,7 +28,7 @@ class ShortLinkController @Inject()(cc: ControllerComponents, actorSystem: Actor
     request.body.validate[PostShortLinks.Request] match {
       case JsSuccess(req, _) =>
         val id = IdGenerator.base58Id()
-        val ref = actorSystem.spawn(ShortLink(id, config), id)
+        val ref = actorSystem.spawnAnonymous(ShortLink(id, config))
         ref.ask(replyTo => ShortLink.Commands.Create(req.originalLinkUrl, replyTo))
           .map{
             case v: ShortLink.Commands.Create.Results.Created => Accepted(v.shortLinkUrl)
@@ -39,6 +39,15 @@ class ShortLinkController @Inject()(cc: ControllerComponents, actorSystem: Actor
         Future.successful(BadRequest(errors.mkString(",")))
     }
   }
+
+  def getShortLink(shortLinkId: String): Action[AnyContent] = Action.async {
+    val ref = actorSystem.spawnAnonymous(ShortLink(shortLinkId, config))
+    ref.ask(replyTo => ShortLink.Commands.GetOriginalLink(replyTo))
+      .map{
+        case v: ShortLink.Commands.GetOriginalLink.Results.OriginalLink => Redirect(v.originalLinkUrl)
+        case _ => InternalServerError
+      }
+  }
 }
 
 object ShortLinkController {
@@ -46,9 +55,5 @@ object ShortLinkController {
   object PostShortLinks {
     case class Request(originalLinkUrl: String)
     implicit val requestWrites: Reads[Request] = Json.reads[Request]
-  }
-
-  def getShortLink(shortLinkId: String) = Action.async {
-    val ref = actorSystem.spawn(ShortLink(shortLinkId, config), shortLinkId)
   }
 }

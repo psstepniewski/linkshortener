@@ -4,3 +4,7 @@ Content-Type: application/json
 {
   "originalLinkUrl": "https://stepniewski.tech/blog/post/4-linkshortener-with-akka-concept/"
 }
+
+###
+
+GET {{host}}/api/v1/short_links/XFw7cU6b
