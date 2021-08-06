@@ -47,4 +47,8 @@ object ShortLinkController {
     case class Request(originalLinkUrl: String)
     implicit val requestWrites: Reads[Request] = Json.reads[Request]
   }
+
+  def getShortLink(shortLinkId: String) = Action.async {
+    val ref = actorSystem.spawn(ShortLink(shortLinkId, config), shortLinkId)
+  }
 }

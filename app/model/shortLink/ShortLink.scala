@@ -6,7 +6,7 @@ import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.{Effect, EventSourcedBehavior, ReplyEffect}
 import com.typesafe.config.Config
 import model.CborSerializable
-import model.shortLink.ShortLink.Commands.Create
+import model.shortLink.ShortLink.Commands.{Create, GetOriginalLink}
 import model.shortLink.ShortLink.Events.Created
 
 import java.time.Instant
@@ -25,13 +25,20 @@ object ShortLink {
         case object AlreadyExists extends Result
       }
     }
+    case class GetOriginalLink(replyTo: ActorRef[GetOriginalLink.Result]) extends Command
+    case object GetOriginalLink {
+      sealed trait Result extends CborSerializable
+      object Results {
+        case class OriginalLink(originalLink: String) extends Result
+      }
+    }
   }
   sealed trait Event extends CborSerializable
   object Events {
     case class Created(shortLinkId: String, shortLinkDomain: String, shortLinkUrl: String, originalLinkUrl: String, timestamp: Instant = Instant.now()) extends Event
   }
 
-  case class State(shortLinkId: String, shortLinkDomain: String, shortLinkUrl: String)
+  case class State(shortLinkId: String, shortLinkDomain: String, shortLinkUrl: String, originalUrl: String)
 
   sealed trait Entity {
     def state: State
@@ -67,6 +74,8 @@ object ShortLink {
     override def applyCommand(cmd: Command)(implicit context: ActorContext[Command]): ReplyEffect[Event, Entity] = cmd match {
       case c: Create =>
         Effect.reply(c.replyTo)(Create.Results.AlreadyExists)
+      case c: GetOriginalLink =>
+        Effect.reply(c.replyTo)(GetOriginalLink.Results.OriginalLink(state.))
       case c =>
         context.log.warn("{}[id={}] unknown command[{}].", entityType, id, c)
         Effect.noReply

@@ -3,5 +3,6 @@
 # ~~~~
 
 POST        /api/v1/short_links                            controllers.ShortLinkController.postShortLinks
+GET         /api/v1/short_links/:shortLinkId               controllers.ShortLinkController.getShortLink(shortLinkId: String)
 
       
