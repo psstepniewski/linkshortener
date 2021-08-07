@@ -21,7 +21,7 @@ object ShortLink {
     case object Create {
       sealed trait Result extends CborSerializable
       object Results {
-        case class Created(shortLinkUrl: String) extends Result
+        case class Created(shortLinkId: String, shortLinkUrl: String) extends Result
         case object AlreadyExists extends Result
       }
     }
@@ -57,7 +57,7 @@ object ShortLink {
         val domain = config.getString("linkshortener.shortLink.domain")
         val url = s"$domain/short-links/${id}"
         Effect.persist(Events.Created(id, domain, url, c.originalLinkUrl))
-          .thenReply(c.replyTo)(_ => Create.Results.Created(url))
+          .thenReply(c.replyTo)(_ => Create.Results.Created(id, url))
       case c: GetOriginalLink =>
         Effect.reply(c.replyTo)(GetOriginalLink.Results.NotFound)
       case c =>

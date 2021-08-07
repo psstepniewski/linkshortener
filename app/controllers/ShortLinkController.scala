@@ -4,15 +4,17 @@ import akka.actor.ActorSystem
 import akka.actor.typed.Scheduler
 import akka.actor.typed.scaladsl.AskPattern.Askable
 import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
-import akka.util.Timeout
+import akka.util.{ByteString, Timeout}
 import com.typesafe.config.Config
 import controllers.ShortLinkController.PostShortLinks
 import model.IdGenerator
 import model.shortLink.ShortLink
 import play.api.Logging
+import play.api.http.Writeable
 import play.api.libs.json._
 import play.api.mvc.{AbstractController, Action, AnyContent, ControllerComponents}
 
+import java.nio.charset.StandardCharsets
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.{ExecutionContext, Future}
@@ -31,7 +33,7 @@ class ShortLinkController @Inject()(cc: ControllerComponents, actorSystem: Actor
         val ref = actorSystem.spawnAnonymous(ShortLink(id, config))
         ref.ask(replyTo => ShortLink.Commands.Create(req.originalLinkUrl, replyTo))
           .map{
-            case v: ShortLink.Commands.Create.Results.Created => Accepted(v.shortLinkUrl)
+            case v: ShortLink.Commands.Create.Results.Created =>    Accepted(PostShortLinks.Response(v.shortLinkId, v.shortLinkUrl))
             case ShortLink.Commands.Create.Results.AlreadyExists => InternalServerError(id)
             case _ => InternalServerError
           }
@@ -53,8 +55,11 @@ class ShortLinkController @Inject()(cc: ControllerComponents, actorSystem: Actor
 
 object ShortLinkController {
 
-  object PostShortLinks {
+  private[ShortLinkController] object PostShortLinks {
     case class Request(originalLinkUrl: String)
-    implicit val requestWrites: Reads[Request] = Json.reads[Request]
+    implicit val requestReads: Reads[Request] = Json.reads[Request]
+
+    case class Response(shortLinkId: String, shortLinkUrl: String)
+    implicit val responseWrites: Writeable[PostShortLinks.Response] = Writeable[PostShortLinks.Response](r => ByteString(Json.writes[Response].writes(r).toString(), StandardCharsets.UTF_8), Some("application/json"))
   }
 }
