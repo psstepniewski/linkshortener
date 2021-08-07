@@ -45,6 +45,7 @@ class ShortLinkController @Inject()(cc: ControllerComponents, actorSystem: Actor
     ref.ask(replyTo => ShortLink.Commands.GetOriginalLink(replyTo))
       .map{
         case v: ShortLink.Commands.GetOriginalLink.Results.OriginalLink => Redirect(v.originalLinkUrl)
+        case ShortLink.Commands.GetOriginalLink.Results.NotFound =>        NotFound
         case _ => InternalServerError
       }
   }
