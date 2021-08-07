@@ -7,7 +7,7 @@ import akka.persistence.typed.scaladsl.{Effect, EventSourcedBehavior, ReplyEffec
 import com.typesafe.config.Config
 import model.CborSerializable
 import model.shortLink.ShortLink.Commands.{Create, GetOriginalLink}
-import model.shortLink.ShortLink.Events.Created
+import model.shortLink.ShortLink.Events.{Created, LinkClicked}
 
 import java.time.Instant
 
@@ -36,6 +36,7 @@ object ShortLink {
   sealed trait Event extends CborSerializable
   object Events {
     case class Created(shortLinkId: String, shortLinkDomain: String, shortLinkUrl: String, originalLinkUrl: String, timestamp: Instant = Instant.now()) extends Event
+    case class LinkClicked(shortLinkId: String, timestamp: Instant = Instant.now()) extends Event
   }
 
   case class State(shortLinkId: String, shortLinkDomain: String, shortLinkUrl: String, originalLinkUrl: String)
@@ -62,7 +63,7 @@ object ShortLink {
 
     override def applyEvent(entity: Entity, event: Event)(implicit context: ActorContext[Command]): Entity = event match {
       case e: Created =>
-        ShortLink(e.shortLinkId, State(e.shortLinkId, e.shortLinkDomain, e.shortLinkUrl, e.originalLinkUrl), config)
+        ShortLink(e.shortLinkId, State(id, e.shortLinkDomain, e.shortLinkUrl, e.originalLinkUrl), config)
       case e =>
         context.log.warn(s"{}[id={}, state=Empty] received unexpected event[{}]", entityType, id, e)
         entity
@@ -75,13 +76,17 @@ object ShortLink {
       case c: Create =>
         Effect.reply(c.replyTo)(Create.Results.AlreadyExists)
       case c: GetOriginalLink =>
-        Effect.reply(c.replyTo)(GetOriginalLink.Results.OriginalLink(state.originalLinkUrl))
+        Effect.persist(Events.LinkClicked(id))
+          .thenReply(c.replyTo)(_ => GetOriginalLink.Results.OriginalLink(state.originalLinkUrl))
       case c =>
         context.log.warn("{}[id={}] unknown command[{}].", entityType, id, c)
         Effect.noReply
     }
 
     override def applyEvent(entity: Entity, event: Event)(implicit context: ActorContext[Command]): Entity = event match {
+      case _: LinkClicked =>
+        //do nothing
+        entity
       case e =>
         context.log.warn(s"{}[id={}] received unexpected event[{}]", entityType, id, e)
         entity
