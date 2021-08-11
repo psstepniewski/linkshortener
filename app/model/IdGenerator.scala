@@ -11,7 +11,7 @@ object IdGenerator {
   def base58Id(byteLength: Integer = 6): String = {
     val randomBytes = new Array[Byte](byteLength)
     secureRandom.nextBytes(randomBytes)
-    Base58.encode(randomBytes)
+    Base58.encode(randomBytes.toIndexedSeq)
   }
 
   // Based on:https://github.com/multiformats/scala-multihash/blob/master/src/main/scala/io/mediachain/multihash/Base58.scalak
