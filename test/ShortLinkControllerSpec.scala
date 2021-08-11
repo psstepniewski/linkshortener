@@ -6,7 +6,7 @@ import controllers.ShortLinkController
 import org.scalatest.GivenWhenThen
 import org.scalatestplus.play.PlaySpec
 import org.scalatestplus.play.components.OneAppPerSuiteWithComponents
-import play.api.http.Status.{OK, SEE_OTHER}
+import play.api.http.Status.{NOT_FOUND, OK, SEE_OTHER}
 import play.api.libs.json.{JsSuccess, Json, Reads, Writes}
 import play.api.routing.Router
 import play.api.test.FakeRequest
@@ -53,11 +53,12 @@ class ShortLinkControllerSpec extends PlaySpec with OneAppPerSuiteWithComponents
 
       createdShortLinkId = contentAsJson(result).validate[Response].map(_.shortLinkId).get
     }
+
   }
 
   "ShortLinkController#getShortLink" should {
 
-    "return originalLinkUrl for known shortLinkId" in {
+    "redirects to originalLinkUrl for known shortLinkId" in {
       Given("fake request with known shortLinkId")
       val request = FakeRequest("GET", s"/api/v1/short_links/$createdShortLinkId")
         .withHeaders("Content-Type" -> "application/json")
@@ -69,6 +70,21 @@ class ShortLinkControllerSpec extends PlaySpec with OneAppPerSuiteWithComponents
       Then("response redirects (303 code) to OriginalLinkUrl")
       status(result) must equal(SEE_OTHER)
       header("Location", result) must contain(originalLinkUrl)
+    }
+
+    "returns NotFound(404) for unknown shortLinkId" in {
+      Given("fake request with unknown shortLinkId")
+      val unknownId = "UnknownId"
+      val request = FakeRequest("GET", s"/api/v1/short_links/$unknownId")
+        .withHeaders("Content-Type" -> "application/json")
+        .withBody("")
+
+      When("getShortLink is requested")
+      val result = route(app, request).get
+
+      Then("response is NotFound(404)")
+      status(result) must equal(NOT_FOUND)
+      header("Location", result) mustBe empty
     }
   }
 }
