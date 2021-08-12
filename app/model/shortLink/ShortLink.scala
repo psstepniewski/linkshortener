@@ -42,21 +42,20 @@ object ShortLink {
 
   case class State(shortLinkId: String, shortLinkDomain: String, shortLinkUrl: String, originalLinkUrl: String)
 
-  sealed trait Entity {
+  sealed trait Entity extends CborSerializable {
     def state: State
     def applyCommand(cmd: Command)(implicit context: ActorContext[Command]): ReplyEffect[Event, Entity]
     def applyEvent(entity: Entity, event: Event)(implicit context: ActorContext[Command]): Entity
   }
 
-  case class EmptyShortLink(id: String, config: Config) extends Entity {
+  case class EmptyShortLink(id: String, shortLinkDomain: String) extends Entity {
 
     override def state: State = throw new IllegalStateException(s"EmptyShortLink[$id] has not approved state yet.")
 
     override def applyCommand(cmd: Command)(implicit context: ActorContext[Command]): ReplyEffect[Event, Entity] = cmd match {
       case c: Create =>
-        val domain = config.getString("linkshortener.shortLink.domain")
-        val url = s"$domain${controllers.routes.ShortLinkController.getShortLink(id).url}"
-        Effect.persist(Events.Created(id, domain, url, c.originalLinkUrl))
+        val url = s"$shortLinkDomain${controllers.routes.ShortLinkController.getShortLink(id).url}"
+        Effect.persist(Events.Created(id, shortLinkDomain, url, c.originalLinkUrl))
           .thenReply(c.replyTo)(_ => Create.Results.Created(id, url))
       case c: GetOriginalLink =>
         Effect.reply(c.replyTo)(GetOriginalLink.Results.NotFound)
@@ -67,14 +66,14 @@ object ShortLink {
 
     override def applyEvent(entity: Entity, event: Event)(implicit context: ActorContext[Command]): Entity = event match {
       case e: Created =>
-        ShortLink(e.shortLinkId, State(id, e.shortLinkDomain, e.shortLinkUrl, e.originalLinkUrl), config)
+        ShortLink(e.shortLinkId, State(id, e.shortLinkDomain, e.shortLinkUrl, e.originalLinkUrl), shortLinkDomain)
       case e =>
         context.log.warn(s"{}[id={}, state=Empty] received unexpected event[{}]", entityType, id, e)
         entity
     }
   }
 
-  case class ShortLink(id: String, state: State, config: Config) extends Entity {
+  case class ShortLink(id: String, state: State, shortLinkDomain: String) extends Entity {
 
     override def applyCommand(cmd: Command)(implicit context: ActorContext[Command]): ReplyEffect[Event, Entity] = cmd match {
       case c: Create =>
@@ -101,7 +100,7 @@ object ShortLink {
     context.log.debug2("Starting entity actor {}[id={}]", entityType, id)
     EventSourcedBehavior.withEnforcedReplies[Command, Event, Entity](
       PersistenceId.of("ShortLink", id),
-      EmptyShortLink(id, config),
+      EmptyShortLink(id, config.getString("linkshortener.shortLink.domain")),
       (state, cmd) => {
         context.log.debug("{}[id={}] receives command {}", entityType, id, cmd)
         state.applyCommand(cmd)

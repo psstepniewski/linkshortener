@@ -23,5 +23,5 @@ libraryDependencies ++= Seq(
   "com.lightbend.akka" %% "akka-persistence-jdbc" % "5.0.1",
 
   "com.typesafe.akka" %% "akka-persistence-testkit" % AkkaVersion % Test,
-  "org.scalatestplus.play" %% "scalatestplus-play" % "4.0.3" % Test,
+  "org.scalatestplus.play" %% "scalatestplus-play" % "5.1.0" % Test,
 )
