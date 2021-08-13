@@ -33,7 +33,7 @@ class ShortLinkControllerSpec extends PlaySpec with OneAppPerSuiteWithComponents
   }
 
   val originalLinkUrl = "https://stepniewski.tech/blog/post/4-linkshortener-with-akka-concept/"
-  var createdShortLinkId: String = ""
+  var newShortLinkResponse: Option[Response] = None
 
   "ShortLinkController#postShortLinks" should {
 
@@ -46,28 +46,30 @@ class ShortLinkControllerSpec extends PlaySpec with OneAppPerSuiteWithComponents
       When("postShortLinks is requested")
       val result = route(app, request).get
 
-      Then("response should contain json body with shortLinkUrl")
-      status(result) must equal(OK)
-      contentType(result) must contain("application/json")
-      contentAsJson(result).validate[Response] mustBe a[JsSuccess[_]]
+      Then("response has OK(200) code and application/json content ")
+      status(result)                            must equal(OK)
+      contentType(result)                       must contain("application/json")
+      Then("response contains of ShortLink id and url ")
+      contentAsJson(result).validate[Response]  mustBe a[JsSuccess[_]]
+      val response = contentAsJson(result).validate[Response].get
+      response.shortLinkUrl                     must startWith(components.configuration.get[String]("linkshortener.shortLink.domain"))
 
-      createdShortLinkId = contentAsJson(result).validate[Response].map(_.shortLinkId).get
+      newShortLinkResponse = Some(response)
     }
-
   }
 
   "ShortLinkController#getShortLink" should {
 
     "redirects to originalLinkUrl for known shortLinkId" in {
       Given("fake request with known shortLinkId")
-      val request = FakeRequest("GET", s"/api/v1/short_links/$createdShortLinkId")
+      val request = FakeRequest("GET", s"/api/v1/short_links/${newShortLinkResponse.get.shortLinkId}")
         .withHeaders("Content-Type" -> "application/json")
         .withBody("")
 
       When("getShortLink is requested")
       val result = route(app, request).get
 
-      Then("response redirects (303 code) to OriginalLinkUrl")
+      Then("response redirects (303 code) to OriginalLink url")
       status(result) must equal(SEE_OTHER)
       header("Location", result) must contain(originalLinkUrl)
     }
