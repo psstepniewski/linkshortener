@@ -2,8 +2,9 @@ import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.persistence.testkit.scaladsl.EventSourcedBehaviorTestKit
 import com.typesafe.config.{Config, ConfigFactory}
 import model.shortLink.ShortLink
-import org.scalatest.MustMatchers.{a, convertToAnyMustWrapper, equal}
-import org.scalatest.{BeforeAndAfterEach, GivenWhenThen, WordSpecLike}
+import org.scalatest.matchers.must.Matchers.convertToAnyMustWrapper
+import org.scalatest.wordspec.AnyWordSpecLike
+import org.scalatest.{BeforeAndAfterEach, GivenWhenThen}
 
 import java.io.File
 
@@ -13,7 +14,7 @@ object ShortLinkSpec {
     .withFallback(ConfigFactory.parseString("""linkshortener.shortLink.domain = "https://stepniewski.tech/f" """))
 }
 
-class ShortLinkSpec extends ScalaTestWithActorTestKit(ShortLinkSpec.testConfig) with WordSpecLike with BeforeAndAfterEach with GivenWhenThen {
+class ShortLinkSpec extends ScalaTestWithActorTestKit(ShortLinkSpec.testConfig) with AnyWordSpecLike with BeforeAndAfterEach with GivenWhenThen {
 
   private val shortLinkId = "testId"
   private val eventSourcedTestKit = EventSourcedBehaviorTestKit[ShortLink.Command, ShortLink.Event, ShortLink.State](
