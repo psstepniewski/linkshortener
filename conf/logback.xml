@@ -2,17 +2,23 @@
 <configuration>
 
   <conversionRule conversionWord="coloredLevel" converterClass="play.api.libs.logback.ColoredLevel" />
+  <property name="LOG_HOME" value="${LINKSHORTENER_LOGDIR:-./logs}" />
 
-  <appender name="FILE" class="ch.qos.logback.core.FileAppender">
-    <file>${application.home:-.}/logs/application.log</file>
+  <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>${LOG_HOME}/linkshortener.log</file>
+
+    <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+      <fileNamePattern>${LOG_HOME}/linkshortener.%d{yyyy-MM-dd}.log.gz</fileNamePattern>
+    </rollingPolicy>
+
     <encoder>
-      <pattern>%date [%level] from %logger in %thread - %message%n%xException</pattern>
+      <pattern>%date | %-5level | %30.30logger | %30.30thread | %message%n%xException</pattern>
     </encoder>
   </appender>
 
   <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
     <encoder>
-      <pattern>%coloredLevel %logger{15} - %message%n%xException{10}</pattern>
+      <pattern>%date | %-5level | %30.30logger | %30.30thread | %message%n%xException</pattern>
     </encoder>
   </appender>
 
@@ -24,16 +30,12 @@
     <appender-ref ref="STDOUT" />
   </appender>
 
-  <logger name="play" level="INFO" />
+  <logger name="play" level="DEBUG" />
   <logger name="application" level="DEBUG" />
 
   <!-- Off these ones as they are annoying, and anyway we manage configuration ourselves -->
-  <logger name="com.avaje.ebean.config.PropertyMapLoader" level="OFF" />
-  <logger name="com.avaje.ebeaninternal.server.core.XmlConfigLoader" level="OFF" />
-  <logger name="com.avaje.ebeaninternal.server.lib.BackgroundThread" level="OFF" />
-  <logger name="com.gargoylesoftware.htmlunit.javascript" level="OFF" />
 
-  <root level="WARN">
+  <root level="DEBUG">
     <appender-ref ref="ASYNCFILE" />
     <appender-ref ref="ASYNCSTDOUT" />
   </root>
