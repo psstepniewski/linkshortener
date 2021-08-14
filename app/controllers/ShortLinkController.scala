@@ -8,7 +8,7 @@ import akka.util.{ByteString, Timeout}
 import com.typesafe.config.Config
 import controllers.ShortLinkController.PostShortLinks
 import model.IdGenerator
-import model.shortLink.ShortLink
+import model.shortLink.{ShortLink, WithShortLink}
 import play.api.Logging
 import play.api.http.Writeable
 import play.api.libs.json._
@@ -18,10 +18,11 @@ import java.nio.charset.StandardCharsets
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.control.TailCalls.TailRec
 
 @Singleton
-class ShortLinkController @Inject()(idGenerator: IdGenerator, cc: ControllerComponents, actorSystem: ActorSystem, config: Config)(implicit ec: ExecutionContext)
-  extends AbstractController(cc) with Logging {
+class ShortLinkController @Inject()(idGenerator: IdGenerator, cc: ControllerComponents, override val actorSystem: ActorSystem, config: Config)(implicit ec: ExecutionContext)
+  extends AbstractController(cc) with Logging with WithShortLink {
 
   implicit val timeout: Timeout = 20.seconds
   implicit val scheduler: Scheduler = actorSystem.toTyped.scheduler
@@ -35,19 +36,20 @@ class ShortLinkController @Inject()(idGenerator: IdGenerator, cc: ControllerComp
       }
       else {
         val id = idGenerator.newId
-        val ref = actorSystem.spawnAnonymous(ShortLink(id, config))
-        ref.ask(replyTo => ShortLink.Commands.Create(originalLinkUrl, replyTo))
-          .flatMap {
-            case v: ShortLink.Commands.Create.Results.Created =>
-              logger.info(s"ShortLinkController#postShortLinks: new ShortLink[id=$id] created. Returning 200.")
-              Future.successful(Ok(PostShortLinks.Response(v.shortLinkId, v.shortLinkUrl)))
-            case ShortLink.Commands.Create.Results.AlreadyExists =>
-              logger.info(s"ShortLinkController#postShortLinks: Id[$id] taken. Starts new Iteration[tryNumber=$tryNumber].")
-              iterate(originalLinkUrl, tryNumber + 1)
-            case e =>
-              logger.error(s"ShortLinkController#postShortLinks: Got unexpected message[$e]. Returning 500.")
-              Future.successful(InternalServerError)
-          }
+        shortLink(id, config).flatMap( ref =>
+          ref.ask(replyTo => ShortLink.Commands.Create(originalLinkUrl, replyTo))
+            .flatMap {
+              case v: ShortLink.Commands.Create.Results.Created =>
+                logger.info(s"ShortLinkController#postShortLinks: new ShortLink[id=$id] created. Returning 200.")
+                Future.successful(Ok(PostShortLinks.Response(v.shortLinkId, v.shortLinkUrl)))
+              case ShortLink.Commands.Create.Results.AlreadyExists =>
+                logger.info(s"ShortLinkController#postShortLinks: Id[$id] taken. Starts new Iteration[tryNumber=$tryNumber].")
+                iterate(originalLinkUrl, tryNumber + 1)
+              case e =>
+                logger.error(s"ShortLinkController#postShortLinks: Got unexpected message[$e]. Returning 500.")
+                Future.successful(InternalServerError)
+            }
+        )
       }
     }
 
@@ -62,13 +64,14 @@ class ShortLinkController @Inject()(idGenerator: IdGenerator, cc: ControllerComp
 
   def getShortLink(shortLinkId: String): Action[AnyContent] = Action.async {
     logger.info(s"ShortLinkController#postShortLinks: new ShortLink[id=$shortLinkId] created. Returning 200.")
-    val ref = actorSystem.spawnAnonymous(ShortLink(shortLinkId, config))
-    ref.ask(replyTo => ShortLink.Commands.GetOriginalLink(replyTo))
-      .map{
-        case v: ShortLink.Commands.GetOriginalLink.Results.OriginalLink => Redirect(v.originalLinkUrl)
-        case ShortLink.Commands.GetOriginalLink.Results.NotFound =>        NotFound
-        case _ => InternalServerError
-      }
+    shortLink(shortLinkId, config).flatMap(ref =>
+      ref.ask(replyTo => ShortLink.Commands.GetOriginalLink(replyTo))
+        .map {
+          case v: ShortLink.Commands.GetOriginalLink.Results.OriginalLink => Redirect(v.originalLinkUrl)
+          case ShortLink.Commands.GetOriginalLink.Results.NotFound => NotFound
+          case _ => InternalServerError
+        }
+    )
   }
 }
 

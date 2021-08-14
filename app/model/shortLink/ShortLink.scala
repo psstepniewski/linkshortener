@@ -60,7 +60,7 @@ object ShortLink {
       case c: GetOriginalLink =>
         Effect.reply(c.replyTo)(GetOriginalLink.Results.NotFound)
       case c =>
-        context.log.warn("{}[id={}, state=Empty] unknown command[{}].", entityType, id, c)
+        context.log.warn("{}[id={}, state=Empty] received unknown command[{}].", entityType, id, c)
         Effect.noReply
     }
 
