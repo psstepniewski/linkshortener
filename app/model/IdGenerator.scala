@@ -13,13 +13,13 @@ trait IdGenerator {
 }
 
 @Singleton
-class Base58IdGenerator(byteLength: Integer = 6) extends IdGenerator {
+class Base58IdGenerator extends IdGenerator {
 
   private val secureRandom: SecureRandom = new SecureRandom()
 
-  override def newId: String = base58Id(byteLength)
+  override def newId: String = base58Id()
 
-  private def base58Id(byteLength: Integer): String = {
+  private def base58Id(byteLength: Integer = 6): String = {
     val randomBytes = new Array[Byte](byteLength)
     secureRandom.nextBytes(randomBytes)
     Base58.encode(randomBytes.toIndexedSeq)
