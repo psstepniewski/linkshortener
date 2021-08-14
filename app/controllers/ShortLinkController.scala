@@ -12,7 +12,7 @@ import model.shortLink.ShortLink
 import play.api.Logging
 import play.api.http.Writeable
 import play.api.libs.json._
-import play.api.mvc.{AbstractController, Action, AnyContent, ControllerComponents, Result}
+import play.api.mvc._
 
 import java.nio.charset.StandardCharsets
 import javax.inject.{Inject, Singleton}
@@ -20,7 +20,7 @@ import scala.concurrent.duration.DurationInt
 import scala.concurrent.{ExecutionContext, Future}
 
 @Singleton
-class ShortLinkController @Inject()(cc: ControllerComponents, actorSystem: ActorSystem, config: Config)(implicit ec: ExecutionContext)
+class ShortLinkController @Inject()(idGenerator: IdGenerator, cc: ControllerComponents, actorSystem: ActorSystem, config: Config)(implicit ec: ExecutionContext)
   extends AbstractController(cc) with Logging {
 
   implicit val timeout: Timeout = 20.seconds
@@ -34,7 +34,7 @@ class ShortLinkController @Inject()(cc: ControllerComponents, actorSystem: Actor
         Future.successful(InternalServerError)
       }
       else {
-        val id = IdGenerator.base58Id()
+        val id = idGenerator.newId
         val ref = actorSystem.spawnAnonymous(ShortLink(id, config))
         ref.ask(replyTo => ShortLink.Commands.Create(originalLinkUrl, replyTo))
           .flatMap {

@@ -2,6 +2,7 @@ import ShortLinkControllerSpec.PostShortLinks
 import ShortLinkControllerSpec.PostShortLinks.{Response, requestWrites}
 import akka.util.Timeout
 import controllers.ShortLinkController
+import model.Base58IdGenerator
 import org.scalatest.GivenWhenThen
 import org.scalatestplus.play.PlaySpec
 import org.scalatestplus.play.components.OneAppPerSuiteWithComponents
@@ -20,7 +21,8 @@ class ShortLinkControllerSpec extends PlaySpec with OneAppPerSuiteWithComponents
 
   override def components: BuiltInComponents =  new BuiltInComponentsFromContext(context) with NoHttpFiltersComponents {
 
-    val shortLinkController = new ShortLinkController(controllerComponents, actorSystem, configuration.underlying)(executionContext)
+    val shortLinkController = new ShortLinkController(new Base58IdGenerator(), controllerComponents, actorSystem, configuration.underlying)(executionContext)
+    val shortLinkControllerWithSameId = new ShortLinkController(new Base58IdGenerator(), controllerComponents, actorSystem, configuration.underlying)(executionContext)
     import play.api.routing.sird._
 
     lazy val router: Router = Router.from({

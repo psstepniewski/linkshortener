@@ -1,14 +1,25 @@
 package model
 
+import com.google.inject.ImplementedBy
+
 import java.math.BigInteger
 import java.security.SecureRandom
+import javax.inject.Singleton
 import scala.annotation.tailrec
 
-object IdGenerator {
+@ImplementedBy(classOf[Base58IdGenerator])
+trait IdGenerator {
+  def newId: String
+}
+
+@Singleton
+class Base58IdGenerator(byteLength: Integer = 6) extends IdGenerator {
 
   private val secureRandom: SecureRandom = new SecureRandom()
 
-  def base58Id(byteLength: Integer = 6): String = {
+  override def newId: String = base58Id(byteLength)
+
+  private def base58Id(byteLength: Integer): String = {
     val randomBytes = new Array[Byte](byteLength)
     secureRandom.nextBytes(randomBytes)
     Base58.encode(randomBytes.toIndexedSeq)
