@@ -12,7 +12,7 @@ import model.shortLink.ShortLink
 import play.api.Logging
 import play.api.http.Writeable
 import play.api.libs.json._
-import play.api.mvc.{AbstractController, Action, AnyContent, ControllerComponents}
+import play.api.mvc.{AbstractController, Action, AnyContent, ControllerComponents, Result}
 
 import java.nio.charset.StandardCharsets
 import javax.inject.{Inject, Singleton}
@@ -27,22 +27,41 @@ class ShortLinkController @Inject()(cc: ControllerComponents, actorSystem: Actor
   implicit val scheduler: Scheduler = actorSystem.toTyped.scheduler
 
   def postShortLinks: Action[JsValue] = Action(parse.json).async { implicit request =>
-    request.body.validate[PostShortLinks.Request] match {
-      case JsSuccess(req, _) =>
+    def iterate(originalLinkUrl: String, tryNumber: Int = 1, maxTriesNumber: Int = 3): Future[Result] = {
+      logger.info(s"ShortLinkController#postShortLinks: create new ShortLink[tryNumber=$tryNumber, maxTriesNumber=$maxTriesNumber] for OriginalLink[url=$originalLinkUrl].")
+      if(tryNumber >= maxTriesNumber) {
+        logger.warn(s"ShortLinkController#postShortLinks: tryNumber[$tryNumber] >= maxTriesNumber[$maxTriesNumber]. Returning 500.")
+        Future.successful(InternalServerError)
+      }
+      else {
         val id = IdGenerator.base58Id()
         val ref = actorSystem.spawnAnonymous(ShortLink(id, config))
-        ref.ask(replyTo => ShortLink.Commands.Create(req.originalLinkUrl, replyTo))
-          .map{
-            case v: ShortLink.Commands.Create.Results.Created =>    Ok(PostShortLinks.Response(v.shortLinkId, v.shortLinkUrl))
-            case ShortLink.Commands.Create.Results.AlreadyExists => InternalServerError(id)
-            case _ => InternalServerError
+        ref.ask(replyTo => ShortLink.Commands.Create(originalLinkUrl, replyTo))
+          .flatMap {
+            case v: ShortLink.Commands.Create.Results.Created =>
+              logger.info(s"ShortLinkController#postShortLinks: new ShortLink[id=$id] created. Returning 200.")
+              Future.successful(Ok(PostShortLinks.Response(v.shortLinkId, v.shortLinkUrl)))
+            case ShortLink.Commands.Create.Results.AlreadyExists =>
+              logger.info(s"ShortLinkController#postShortLinks: Id[$id] taken. Starts new Iteration[tryNumber=$tryNumber].")
+              iterate(originalLinkUrl, tryNumber + 1)
+            case e =>
+              logger.error(s"ShortLinkController#postShortLinks: Got unexpected message[$e]. Returning 500.")
+              Future.successful(InternalServerError)
           }
+      }
+    }
+
+    request.body.validate[PostShortLinks.Request] match {
+      case JsSuccess(req, _) =>
+        iterate(req.originalLinkUrl)
       case JsError(errors) =>
+        logger.error(s"ShortLinkController#postShortLinks: cannot parse json to Request object. Returning 400. Errors: $errors")
         Future.successful(BadRequest(errors.mkString(",")))
     }
   }
 
   def getShortLink(shortLinkId: String): Action[AnyContent] = Action.async {
+    logger.info(s"ShortLinkController#postShortLinks: new ShortLink[id=$shortLinkId] created. Returning 200.")
     val ref = actorSystem.spawnAnonymous(ShortLink(shortLinkId, config))
     ref.ask(replyTo => ShortLink.Commands.GetOriginalLink(replyTo))
       .map{
