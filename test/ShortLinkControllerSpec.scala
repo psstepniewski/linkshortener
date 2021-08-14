@@ -1,12 +1,12 @@
-import ShortLinkControllerSpec.PostShortLinks
+import ShortLinkControllerSpec.{PostShortLinks, ReturnGivenId}
 import ShortLinkControllerSpec.PostShortLinks.{Response, requestWrites}
 import akka.util.Timeout
 import controllers.ShortLinkController
-import model.Base58IdGenerator
+import model.{Base58IdGenerator, IdGenerator}
 import org.scalatest.GivenWhenThen
 import org.scalatestplus.play.PlaySpec
 import org.scalatestplus.play.components.OneAppPerSuiteWithComponents
-import play.api.http.Status.{NOT_FOUND, OK, SEE_OTHER}
+import play.api.http.Status.{INTERNAL_SERVER_ERROR, NOT_FOUND, OK, SEE_OTHER}
 import play.api.libs.json.{JsSuccess, Json, Reads, Writes}
 import play.api.routing.Router
 import play.api.test.FakeRequest
@@ -22,12 +22,13 @@ class ShortLinkControllerSpec extends PlaySpec with OneAppPerSuiteWithComponents
   override def components: BuiltInComponents =  new BuiltInComponentsFromContext(context) with NoHttpFiltersComponents {
 
     val shortLinkController = new ShortLinkController(new Base58IdGenerator(), controllerComponents, actorSystem, configuration.underlying)(executionContext)
-    val shortLinkControllerWithSameId = new ShortLinkController(new Base58IdGenerator(), controllerComponents, actorSystem, configuration.underlying)(executionContext)
+    val shortLinkControllerWithSameId = new ShortLinkController(new ReturnGivenId("testId"), controllerComponents, actorSystem, configuration.underlying)(executionContext)
     import play.api.routing.sird._
 
     lazy val router: Router = Router.from({
-      case POST(p"/api/v1/short_links") => shortLinkController.postShortLinks
-      case GET(p"/api/v1/short_links/$shortLinkId") => shortLinkController.getShortLink(shortLinkId)
+      case POST(p"/api/v1/short_links")              => shortLinkController.postShortLinks
+      case POST(p"/api/v1/short_links_same_id")      => shortLinkControllerWithSameId.postShortLinks
+      case GET (p"/api/v1/short_links/$shortLinkId") => shortLinkController.getShortLink(shortLinkId)
     })
 
     override lazy val configuration: Configuration = ConfigurationProvider.testConfig.withFallback(context.initialConfiguration)
@@ -57,12 +58,29 @@ class ShortLinkControllerSpec extends PlaySpec with OneAppPerSuiteWithComponents
 
       newShortLinkResponse = Some(response)
     }
+
+    "return InternalServerError(500) if controller always generate the same shortLinkId" in  {
+      Given("fake request with originalLinkUrl")
+      val request = FakeRequest("POST", "/api/v1/short_links_same_id")
+        .withHeaders("Content-Type" -> "application/json")
+        .withBody(Json.toJson(PostShortLinks.Request(originalLinkUrl)))
+      Given("controller which always generate the same shortLinkId")
+      // nothing - controller is declared above
+
+      When("postShortLinks was already requested")
+      route(app, request)
+      When("postShortLinks is requested again")
+      val result = route(app, request).get
+
+      Then("response is InternalServerError(500)")
+      status(result) must equal(INTERNAL_SERVER_ERROR)
+    }
   }
 
   "ShortLinkController#getShortLink" should {
 
     "redirects to originalLinkUrl for known shortLinkId" in {
-      Given("fake request with known shortLinkId")
+      Given("fake request with earlier used shortLinkId")
       val request = FakeRequest("GET", s"/api/v1/short_links/${newShortLinkResponse.get.shortLinkId}")
         .withHeaders("Content-Type" -> "application/json")
         .withBody("")
@@ -76,7 +94,7 @@ class ShortLinkControllerSpec extends PlaySpec with OneAppPerSuiteWithComponents
     }
 
     "returns NotFound(404) for unknown shortLinkId" in {
-      Given("fake request with unknown shortLinkId")
+      Given("fake request with never used shortLinkId")
       val unknownId = "UnknownId"
       val request = FakeRequest("GET", s"/api/v1/short_links/$unknownId")
         .withHeaders("Content-Type" -> "application/json")
@@ -99,5 +117,9 @@ object ShortLinkControllerSpec {
 
     case class Response(shortLinkId: String, shortLinkUrl: String)
     implicit val responseReads: Reads[Response] = Json.reads[Response]
+  }
+
+  class ReturnGivenId(id: String) extends IdGenerator {
+    override def newId: String = id
   }
 }
