@@ -1,6 +1,5 @@
 import ShortLinkControllerSpec.PostShortLinks
 import ShortLinkControllerSpec.PostShortLinks.{Response, requestWrites}
-import akka.persistence.testkit.PersistenceTestKitPlugin
 import akka.util.Timeout
 import controllers.ShortLinkController
 import org.scalatest.GivenWhenThen
@@ -29,7 +28,7 @@ class ShortLinkControllerSpec extends PlaySpec with OneAppPerSuiteWithComponents
       case GET(p"/api/v1/short_links/$shortLinkId") => shortLinkController.getShortLink(shortLinkId)
     })
 
-    override lazy val configuration: Configuration = Configuration(PersistenceTestKitPlugin.config).withFallback(context.initialConfiguration)
+    override lazy val configuration: Configuration = ConfigurationProvider.testConfig.withFallback(context.initialConfiguration)
   }
 
   val originalLinkUrl = "https://stepniewski.tech/blog/post/4-linkshortener-with-akka-concept/"

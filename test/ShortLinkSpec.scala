@@ -1,26 +1,15 @@
-import ShortLinkSpec.shortLinkDomain
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.persistence.testkit.scaladsl.EventSourcedBehaviorTestKit
-import com.typesafe.config.{Config, ConfigFactory}
 import model.shortLink.ShortLink
 import org.scalatest.matchers.must.Matchers.convertToAnyMustWrapper
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.scalatest.{BeforeAndAfterEach, GivenWhenThen}
 
-import java.io.File
-
-object ShortLinkSpec {
-  val shortLinkDomain = "https://stepniewski.tech/f"
-  val testConfig: Config = EventSourcedBehaviorTestKit.config
-    .withFallback(ConfigFactory.parseFile(new File("conf/test/0-akka-serialization.conf")).resolve())
-    .withFallback(ConfigFactory.parseString(s"""linkshortener.shortLink.domain = "$shortLinkDomain" """))
-}
-
-class ShortLinkSpec extends ScalaTestWithActorTestKit(ShortLinkSpec.testConfig) with AnyWordSpecLike with BeforeAndAfterEach with GivenWhenThen {
+class ShortLinkSpec extends ScalaTestWithActorTestKit(ConfigurationProvider.testConfig.underlying) with AnyWordSpecLike with BeforeAndAfterEach with GivenWhenThen {
 
   private val shortLinkId = "testId"
   private val eventSourcedTestKit = EventSourcedBehaviorTestKit[ShortLink.Command, ShortLink.Event, ShortLink.State](
-    system, ShortLink(shortLinkId, ShortLinkSpec.testConfig)
+    system, ShortLink(shortLinkId, ConfigurationProvider.testConfig.underlying)
   )
 
   override protected def beforeEach(): Unit = {
@@ -28,6 +17,7 @@ class ShortLinkSpec extends ScalaTestWithActorTestKit(ShortLinkSpec.testConfig) 
     eventSourcedTestKit.clear()
   }
 
+  private val shortLinkDomain = ConfigurationProvider.testConfig.get[String]("linkshortener.shortLink.domain")
   private val originalLinkUrl = "https://stepniewski.tech/blog/post/4-linkshortener-with-akka-concept/"
 
   "ShortLink#Create" should {
