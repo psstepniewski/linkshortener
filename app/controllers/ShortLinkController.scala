@@ -62,15 +62,21 @@ class ShortLinkController @Inject()(idGenerator: IdGenerator, cc: ControllerComp
   }
 
   def getShortLink(shortLinkId: String): Action[AnyContent] = Action.async { implicit request =>
-    logger.info(s"ShortLinkController#postShortLinks: new ShortLink[id=$shortLinkId] created. Returning 200.")
+    logger.info(s"ShortLinkController#getShortLink: ShortLink[id=$shortLinkId] clicked, get OriginalLink url.")
     val userAgentHeader = request.headers.get(USER_AGENT)
     val xForwardedForHeader = request.headers.get(X_FORWARDED_FOR)
     shortLink(shortLinkId, config).flatMap(ref =>
       ref.ask(replyTo => ShortLink.Commands.Click(userAgentHeader, xForwardedForHeader, replyTo))
         .map {
-          case v: ShortLink.Commands.Click.Results.RedirectTo => Redirect(v.originalLinkUrl)
-          case ShortLink.Commands.Click.Results.NotFound => NotFound
-          case _ => InternalServerError
+          case v: ShortLink.Commands.Click.Results.RedirectTo =>
+            logger.info(s"ShortLinkController#getShortLink: OriginalLink for ShortLink[id=$shortLinkId] found. Returning 303 to OriginalLink url.")
+            Redirect(v.originalLinkUrl)
+          case ShortLink.Commands.Click.Results.NotFound =>
+            logger.info(s"ShortLinkController#getShortLink: OriginalLink for ShortLink[id=$shortLinkId] NOT found. Returning 404.")
+            NotFound
+          case e =>
+            logger.error(s"ShortLinkController#getShortLink: Got unexpected message[$e]. Returning 500.")
+            InternalServerError
         }
     )
   }
