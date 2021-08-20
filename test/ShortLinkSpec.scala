@@ -8,6 +8,8 @@ import org.scalatest.{BeforeAndAfterEach, GivenWhenThen}
 class ShortLinkSpec extends ScalaTestWithActorTestKit(ConfigurationProvider.testConfig.underlying) with AnyWordSpecLike with BeforeAndAfterEach with GivenWhenThen {
 
   private val shortLinkId = "testId"
+  private val userAgent = "Mozilla/5.0 (platform; rv:geckoversion) Gecko/geckotrail Firefox/firefoxversion"
+  private val xForwardedFor = "203.0.113.195, 70.41.3.18, 150.172.238.178"
   private val eventSourcedTestKit = EventSourcedBehaviorTestKit[ShortLink.Command, ShortLink.Event, ShortLink.State](
     system, ShortLink(shortLinkId, ConfigurationProvider.testConfig.underlying)
   )
@@ -62,9 +64,11 @@ class ShortLinkSpec extends ScalaTestWithActorTestKit(ConfigurationProvider.test
     "reply with RedirectTo OriginalLink url" in {
       Given("non-empty ShortLink actor")
       eventSourcedTestKit.runCommand(ref => ShortLink.Commands.Create(originalLinkUrl, ref))
+      Given("User-Agent and X-Forwarded-For non empty values")
+      //do nothing - values are defined above
 
       When("Click message is send")
-      val result = eventSourcedTestKit.runCommand(ref => ShortLink.Commands.Click(ref))
+      val result = eventSourcedTestKit.runCommand(ref => ShortLink.Commands.Click(Some(userAgent), Some(xForwardedFor), ref))
 
       Then("actor replies with OriginalLink url")
       result.reply mustBe a[ShortLink.Commands.Click.Results.RedirectTo]
@@ -73,15 +77,19 @@ class ShortLinkSpec extends ScalaTestWithActorTestKit(ConfigurationProvider.test
       Then("actor persists LinkClicked event")
       result.event  mustBe a[ShortLink.Events.LinkClicked]
       val event = result.event.asInstanceOf[ShortLink.Events.LinkClicked];
-      event.shortLinkId       mustEqual shortLinkId
+      event.shortLinkId         mustEqual shortLinkId
+      event.userAgentHeader     mustBe    Some(userAgent)
+      event.xForwardedForHeader mustBe    Some(xForwardedFor)
     }
 
     "reply with NotFound if empty ShortLink is asked" in {
       Given("empty ShortLink actor")
       // do nothing
+      Given("empty User-Agent and X-Forwarder-For values")
+      //do nothing
 
       When("Click message is send")
-      val result = eventSourcedTestKit.runCommand(ref => ShortLink.Commands.Click(ref))
+      val result = eventSourcedTestKit.runCommand(ref => ShortLink.Commands.Click(None, None, ref))
 
       Then("actor replies with NotFound message")
       result.reply mustBe theSameInstanceAs(ShortLink.Commands.Click.Results.NotFound)

@@ -61,10 +61,12 @@ class ShortLinkController @Inject()(idGenerator: IdGenerator, cc: ControllerComp
     }
   }
 
-  def getShortLink(shortLinkId: String): Action[AnyContent] = Action.async {
+  def getShortLink(shortLinkId: String): Action[AnyContent] = Action.async { implicit request =>
     logger.info(s"ShortLinkController#postShortLinks: new ShortLink[id=$shortLinkId] created. Returning 200.")
+    val userAgentHeader = request.headers.get(USER_AGENT)
+    val xForwardedForHeader = request.headers.get(X_FORWARDED_FOR)
     shortLink(shortLinkId, config).flatMap(ref =>
-      ref.ask(replyTo => ShortLink.Commands.Click(replyTo))
+      ref.ask(replyTo => ShortLink.Commands.Click(userAgentHeader, xForwardedForHeader, replyTo))
         .map {
           case v: ShortLink.Commands.Click.Results.RedirectTo => Redirect(v.originalLinkUrl)
           case ShortLink.Commands.Click.Results.NotFound => NotFound

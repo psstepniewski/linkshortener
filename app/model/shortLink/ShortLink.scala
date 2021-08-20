@@ -25,7 +25,7 @@ object ShortLink {
         case object AlreadyExists extends Result
       }
     }
-    case class Click(replyTo: ActorRef[Click.Result]) extends Command
+    case class Click(userAgentHeader: Option[String], xForwardedForHeader: Option[String], replyTo: ActorRef[Click.Result]) extends Command
     case object Click {
       sealed trait Result extends CborSerializable
       object Results {
@@ -37,7 +37,7 @@ object ShortLink {
   sealed trait Event extends CborSerializable
   object Events {
     case class Created(shortLinkId: String, shortLinkDomain: String, shortLinkUrl: String, originalLinkUrl: String, timestamp: Instant = Instant.now()) extends Event
-    case class LinkClicked(shortLinkId: String, timestamp: Instant = Instant.now()) extends Event
+    case class LinkClicked(shortLinkId: String, userAgentHeader: Option[String], xForwardedForHeader: Option[String], timestamp: Instant = Instant.now()) extends Event
   }
 
   case class State(shortLinkId: String, shortLinkDomain: String, shortLinkUrl: String, originalLinkUrl: String)
@@ -79,7 +79,7 @@ object ShortLink {
       case c: Create =>
         Effect.reply(c.replyTo)(Create.Results.AlreadyExists)
       case c: Click =>
-        Effect.persist(Events.LinkClicked(id))
+        Effect.persist(Events.LinkClicked(id, c.userAgentHeader, c.xForwardedForHeader))
           .thenReply(c.replyTo)(_ => Click.Results.RedirectTo(state.originalLinkUrl))
       case c =>
         context.log.warn("{}[id={}] unknown command[{}].", entityType, id, c)
