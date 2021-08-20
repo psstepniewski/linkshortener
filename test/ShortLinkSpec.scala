@@ -57,18 +57,18 @@ class ShortLinkSpec extends ScalaTestWithActorTestKit(ConfigurationProvider.test
     }
   }
 
-  "ShortLink#GetOriginalLink" should {
+  "ShortLink#Click" should {
 
-    "reply with OriginalLink" in {
+    "reply with RedirectTo OriginalLink url" in {
       Given("non-empty ShortLink actor")
       eventSourcedTestKit.runCommand(ref => ShortLink.Commands.Create(originalLinkUrl, ref))
 
-      When("GetOriginalLink message is send")
-      val result = eventSourcedTestKit.runCommand(ref => ShortLink.Commands.GetOriginalLink(ref))
+      When("Click message is send")
+      val result = eventSourcedTestKit.runCommand(ref => ShortLink.Commands.Click(ref))
 
       Then("actor replies with OriginalLink url")
-      result.reply mustBe a[ShortLink.Commands.GetOriginalLink.Results.OriginalLink]
-      val reply = result.reply.asInstanceOf[ShortLink.Commands.GetOriginalLink.Results.OriginalLink]
+      result.reply mustBe a[ShortLink.Commands.Click.Results.RedirectTo]
+      val reply = result.reply.asInstanceOf[ShortLink.Commands.Click.Results.RedirectTo]
       reply.originalLinkUrl   mustEqual originalLinkUrl
       Then("actor persists LinkClicked event")
       result.event  mustBe a[ShortLink.Events.LinkClicked]
@@ -80,11 +80,11 @@ class ShortLinkSpec extends ScalaTestWithActorTestKit(ConfigurationProvider.test
       Given("empty ShortLink actor")
       // do nothing
 
-      When("GetOriginalLink message is send")
-      val result = eventSourcedTestKit.runCommand(ref => ShortLink.Commands.GetOriginalLink(ref))
+      When("Click message is send")
+      val result = eventSourcedTestKit.runCommand(ref => ShortLink.Commands.Click(ref))
 
       Then("actor replies with NotFound message")
-      result.reply mustBe theSameInstanceAs(ShortLink.Commands.GetOriginalLink.Results.NotFound)
+      result.reply mustBe theSameInstanceAs(ShortLink.Commands.Click.Results.NotFound)
       Then("actor doesn't persist any event")
       result.events mustBe empty
     }

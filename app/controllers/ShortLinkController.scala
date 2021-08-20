@@ -64,10 +64,10 @@ class ShortLinkController @Inject()(idGenerator: IdGenerator, cc: ControllerComp
   def getShortLink(shortLinkId: String): Action[AnyContent] = Action.async {
     logger.info(s"ShortLinkController#postShortLinks: new ShortLink[id=$shortLinkId] created. Returning 200.")
     shortLink(shortLinkId, config).flatMap(ref =>
-      ref.ask(replyTo => ShortLink.Commands.GetOriginalLink(replyTo))
+      ref.ask(replyTo => ShortLink.Commands.Click(replyTo))
         .map {
-          case v: ShortLink.Commands.GetOriginalLink.Results.OriginalLink => Redirect(v.originalLinkUrl)
-          case ShortLink.Commands.GetOriginalLink.Results.NotFound => NotFound
+          case v: ShortLink.Commands.Click.Results.RedirectTo => Redirect(v.originalLinkUrl)
+          case ShortLink.Commands.Click.Results.NotFound => NotFound
           case _ => InternalServerError
         }
     )

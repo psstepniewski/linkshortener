@@ -6,7 +6,7 @@ import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.{Effect, EventSourcedBehavior, ReplyEffect}
 import com.typesafe.config.Config
 import model.CborSerializable
-import model.shortLink.ShortLink.Commands.{Create, GetOriginalLink}
+import model.shortLink.ShortLink.Commands.{Create, Click}
 import model.shortLink.ShortLink.Events.{Created, LinkClicked}
 
 import java.time.Instant
@@ -25,11 +25,11 @@ object ShortLink {
         case object AlreadyExists extends Result
       }
     }
-    case class GetOriginalLink(replyTo: ActorRef[GetOriginalLink.Result]) extends Command
-    case object GetOriginalLink {
+    case class Click(replyTo: ActorRef[Click.Result]) extends Command
+    case object Click {
       sealed trait Result extends CborSerializable
       object Results {
-        case class OriginalLink(originalLinkUrl: String) extends Result
+        case class RedirectTo(originalLinkUrl: String) extends Result
         case object NotFound extends Result
       }
     }
@@ -57,8 +57,8 @@ object ShortLink {
         val url = s"$shortLinkDomain${controllers.routes.ShortLinkController.getShortLink(id).url}"
         Effect.persist(Events.Created(id, shortLinkDomain, url, c.originalLinkUrl))
           .thenReply(c.replyTo)(_ => Create.Results.Created(id, url))
-      case c: GetOriginalLink =>
-        Effect.reply(c.replyTo)(GetOriginalLink.Results.NotFound)
+      case c: Click =>
+        Effect.reply(c.replyTo)(Click.Results.NotFound)
       case c =>
         context.log.warn("{}[id={}, state=Empty] received unknown command[{}].", entityType, id, c)
         Effect.noReply
@@ -78,9 +78,9 @@ object ShortLink {
     override def applyCommand(cmd: Command)(implicit context: ActorContext[Command]): ReplyEffect[Event, Entity] = cmd match {
       case c: Create =>
         Effect.reply(c.replyTo)(Create.Results.AlreadyExists)
-      case c: GetOriginalLink =>
+      case c: Click =>
         Effect.persist(Events.LinkClicked(id))
-          .thenReply(c.replyTo)(_ => GetOriginalLink.Results.OriginalLink(state.originalLinkUrl))
+          .thenReply(c.replyTo)(_ => Click.Results.RedirectTo(state.originalLinkUrl))
       case c =>
         context.log.warn("{}[id={}] unknown command[{}].", entityType, id, c)
         Effect.noReply
