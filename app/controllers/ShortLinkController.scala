@@ -18,7 +18,6 @@ import java.nio.charset.StandardCharsets
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.control.TailCalls.TailRec
 
 @Singleton
 class ShortLinkController @Inject()(idGenerator: IdGenerator, cc: ControllerComponents, override val actorSystem: ActorSystem, config: Config)(implicit ec: ExecutionContext)
@@ -30,7 +29,7 @@ class ShortLinkController @Inject()(idGenerator: IdGenerator, cc: ControllerComp
   def postShortLinks: Action[JsValue] = Action(parse.json).async { implicit request =>
     def iterate(originalLinkUrl: String, tryNumber: Int = 1, maxTriesNumber: Int = 3): Future[Result] = {
       logger.info(s"ShortLinkController#postShortLinks: create new ShortLink[tryNumber=$tryNumber, maxTriesNumber=$maxTriesNumber] for OriginalLink[url=$originalLinkUrl].")
-      if(tryNumber >= maxTriesNumber) {
+      if(tryNumber > maxTriesNumber) {
         logger.warn(s"ShortLinkController#postShortLinks: tryNumber[$tryNumber] >= maxTriesNumber[$maxTriesNumber]. Returning 500.")
         Future.successful(InternalServerError)
       }
