@@ -7,7 +7,7 @@ import akka.persistence.typed.scaladsl.{Effect, EventSourcedBehavior, ReplyEffec
 import com.typesafe.config.Config
 import model.CborSerializable
 import model.shortLink.ShortLink.Commands.{Create, Click}
-import model.shortLink.ShortLink.Events.{Created, LinkClicked}
+import model.shortLink.ShortLink.Events.{Created, Clicked}
 
 import java.time.Instant
 
@@ -37,7 +37,7 @@ object ShortLink {
   sealed trait Event extends CborSerializable
   object Events {
     case class Created(shortLinkId: String, shortLinkDomain: String, shortLinkUrl: String, originalLinkUrl: String, timestamp: Instant = Instant.now()) extends Event
-    case class LinkClicked(shortLinkId: String, userAgentHeader: Option[String], xForwardedForHeader: Option[String], timestamp: Instant = Instant.now()) extends Event
+    case class Clicked(shortLinkId: String, userAgentHeader: Option[String], xForwardedForHeader: Option[String], timestamp: Instant = Instant.now()) extends Event
   }
 
   case class State(shortLinkId: String, shortLinkDomain: String, shortLinkUrl: String, originalLinkUrl: String)
@@ -79,7 +79,7 @@ object ShortLink {
       case c: Create =>
         Effect.reply(c.replyTo)(Create.Results.AlreadyExists)
       case c: Click =>
-        Effect.persist(Events.LinkClicked(id, c.userAgentHeader, c.xForwardedForHeader))
+        Effect.persist(Events.Clicked(id, c.userAgentHeader, c.xForwardedForHeader))
           .thenReply(c.replyTo)(_ => Click.Results.RedirectTo(state.originalLinkUrl))
       case c =>
         context.log.warn("{}[id={}] unknown command[{}].", entityType, id, c)
@@ -87,7 +87,7 @@ object ShortLink {
     }
 
     override def applyEvent(entity: Entity, event: Event)(implicit context: ActorContext[Command]): Entity = event match {
-      case _: LinkClicked =>
+      case _: Clicked =>
         //do nothing
         entity
       case e =>

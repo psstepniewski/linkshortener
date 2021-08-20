@@ -74,9 +74,9 @@ class ShortLinkSpec extends ScalaTestWithActorTestKit(ConfigurationProvider.test
       result.reply mustBe a[ShortLink.Commands.Click.Results.RedirectTo]
       val reply = result.reply.asInstanceOf[ShortLink.Commands.Click.Results.RedirectTo]
       reply.originalLinkUrl   mustEqual originalLinkUrl
-      Then("actor persists LinkClicked event")
-      result.event  mustBe a[ShortLink.Events.LinkClicked]
-      val event = result.event.asInstanceOf[ShortLink.Events.LinkClicked];
+      Then("actor persists Clicked event")
+      result.event  mustBe a[ShortLink.Events.Clicked]
+      val event = result.event.asInstanceOf[ShortLink.Events.Clicked];
       event.shortLinkId         mustEqual shortLinkId
       event.userAgentHeader     mustBe    Some(userAgent)
       event.xForwardedForHeader mustBe    Some(xForwardedFor)
