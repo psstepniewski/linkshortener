@@ -6,14 +6,16 @@ import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.{Effect, EventSourcedBehavior, ReplyEffect}
 import com.typesafe.config.Config
 import model.CborSerializable
-import model.shortLink.ShortLink.Commands.{Create, Click}
-import model.shortLink.ShortLink.Events.{Created, Clicked}
+import model.shortLink.ShortLink.Commands.{Click, Create, ReceiveTimeout}
+import model.shortLink.ShortLink.Events.{Clicked, Created}
 
 import java.time.Instant
+import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
 object ShortLink {
 
-  val entityType = "ShortLink"
+  private val entityType = "ShortLink"
+  private val receiveTimeout: FiniteDuration = 30.seconds
 
   sealed trait Command extends CborSerializable
   object Commands {
@@ -33,6 +35,7 @@ object ShortLink {
         case object NotFound extends Result
       }
     }
+    case object ReceiveTimeout extends Command
   }
   sealed trait Event extends CborSerializable
   object Events {
@@ -58,10 +61,15 @@ object ShortLink {
         Effect.persist(Events.Created(id, shortLinkDomain, url, c.originalLinkUrl))
           .thenReply(c.replyTo)(_ => Create.Results.Created(id, url))
       case c: Click =>
-        Effect.reply(c.replyTo)(Click.Results.NotFound)
+        Effect.stop()
+          .thenReply(c.replyTo)(_ => Click.Results.NotFound)
+      case ReceiveTimeout =>
+        Effect.stop()
+          .thenNoReply()
       case c =>
         context.log.warn("{}[id={}, state=Empty] received unknown command[{}].", entityType, id, c)
-        Effect.noReply
+        Effect.stop()
+          .thenNoReply()
     }
 
     override def applyEvent(entity: Entity, event: Event)(implicit context: ActorContext[Command]): Entity = event match {
@@ -81,6 +89,9 @@ object ShortLink {
       case c: Click =>
         Effect.persist(Events.Clicked(id, c.userAgentHeader, c.xForwardedForHeader))
           .thenReply(c.replyTo)(_ => Click.Results.RedirectTo(state.originalLinkUrl))
+      case ReceiveTimeout =>
+        Effect.stop()
+          .thenNoReply()
       case c =>
         context.log.warn("{}[id={}] unknown command[{}].", entityType, id, c)
         Effect.noReply
@@ -98,6 +109,7 @@ object ShortLink {
 
   def apply(id: String, config: Config): Behavior[Command] = Behaviors.setup { implicit context =>
     context.log.debug2("Starting entity actor {}[id={}]", entityType, id)
+    context.setReceiveTimeout(receiveTimeout, ReceiveTimeout)
     EventSourcedBehavior.withEnforcedReplies[Command, Event, Entity](
       PersistenceId.of("ShortLink", id),
       EmptyShortLink(id, config.getString("linkshortener.shortLink.domain")),
