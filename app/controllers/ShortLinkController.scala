@@ -55,6 +55,10 @@ class ShortLinkController @Inject()(idGenerator: IdGenerator, cc: ControllerComp
     request.body.validate[PostShortLinks.Request] match {
       case JsSuccess(req, _) =>
         iterate(req.originalLinkUrl)
+          .recover{case e =>
+            logger.error(s"ShortLinkController#postShortLinks: unexpected error. Returning 500.", e)
+            InternalServerError
+          }
       case JsError(errors) =>
         logger.error(s"ShortLinkController#postShortLinks: cannot parse json to Request object. Returning 400. Errors: $errors")
         Future.successful(BadRequest(errors.mkString(",")))
@@ -77,6 +81,10 @@ class ShortLinkController @Inject()(idGenerator: IdGenerator, cc: ControllerComp
           case e =>
             logger.error(s"ShortLinkController#getShortLink: Got unexpected message[$e]. Returning 500.")
             InternalServerError
+        }
+        .recover{case e =>
+          logger.error(s"ShortLinkController#getShortLink: unexpected error. Returning 500.", e)
+          InternalServerError
         }
     )
   }
