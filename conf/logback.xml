@@ -34,6 +34,9 @@
   <logger name="application" level="DEBUG" />
 
   <!-- Off these ones as they are annoying, and anyway we manage configuration ourselves -->
+  <logger name="slick.jdbc" level="INFO" />
+  <logger name="slick.compiler" level="INFO" />
+  <logger name="slick.relational" level="INFO" />
 
   <root level="DEBUG">
     <appender-ref ref="ASYNCFILE" />
