@@ -43,19 +43,19 @@ object ShortLink {
     case class Clicked(shortLinkId: String, userAgentHeader: Option[String], xForwardedForHeader: Option[String], timestamp: Instant = Instant.now()) extends Event
   }
 
-  case class State(shortLinkId: String, shortLinkDomain: String, shortLinkUrl: String, originalLinkUrl: String)
+  case class Snapshot(shortLinkId: String, shortLinkDomain: String, shortLinkUrl: String, originalLinkUrl: String)
 
-  sealed trait Entity extends CborSerializable {
-    def state: State
-    def applyCommand(cmd: Command)(implicit context: ActorContext[Command]): ReplyEffect[Event, Entity]
-    def applyEvent(entity: Entity, event: Event)(implicit context: ActorContext[Command]): Entity
+  sealed trait State extends CborSerializable {
+    def snapshot: Snapshot
+    def applyCommand(cmd: Command)(implicit context: ActorContext[Command]): ReplyEffect[Event, State]
+    def applyEvent(state: State, event: Event)(implicit context: ActorContext[Command]): State
   }
 
-  case class EmptyShortLink(id: String, shortLinkDomain: String) extends Entity {
+  case class EmptyShortLink(id: String, shortLinkDomain: String) extends State {
 
-    override def state: State = throw new IllegalStateException(s"EmptyShortLink[$id] has not approved state yet.")
+    override def snapshot: Snapshot = throw new IllegalStateException(s"EmptyShortLink[$id] has not approved state yet.")
 
-    override def applyCommand(cmd: Command)(implicit context: ActorContext[Command]): ReplyEffect[Event, Entity] = cmd match {
+    override def applyCommand(cmd: Command)(implicit context: ActorContext[Command]): ReplyEffect[Event, State] = cmd match {
       case c: Create =>
         val url = s"$shortLinkDomain${controllers.routes.ShortLinkController.getShortLink(id).url}"
         Effect.persist(Events.Created(id, shortLinkDomain, url, c.originalLinkUrl))
@@ -72,23 +72,23 @@ object ShortLink {
           .thenNoReply()
     }
 
-    override def applyEvent(entity: Entity, event: Event)(implicit context: ActorContext[Command]): Entity = event match {
+    override def applyEvent(state: State, event: Event)(implicit context: ActorContext[Command]): State = event match {
       case e: Created =>
-        ShortLink(e.shortLinkId, State(id, e.shortLinkDomain, e.shortLinkUrl, e.originalLinkUrl), shortLinkDomain)
+        ShortLink(e.shortLinkId, Snapshot(id, e.shortLinkDomain, e.shortLinkUrl, e.originalLinkUrl), shortLinkDomain)
       case e =>
         context.log.warn(s"{}[id={}, state=Empty] received unexpected event[{}]", entityType, id, e)
-        entity
+        state
     }
   }
 
-  case class ShortLink(id: String, state: State, shortLinkDomain: String) extends Entity {
+  case class ShortLink(id: String, snapshot: Snapshot, shortLinkDomain: String) extends State {
 
-    override def applyCommand(cmd: Command)(implicit context: ActorContext[Command]): ReplyEffect[Event, Entity] = cmd match {
+    override def applyCommand(cmd: Command)(implicit context: ActorContext[Command]): ReplyEffect[Event, State] = cmd match {
       case c: Create =>
         Effect.reply(c.replyTo)(Create.Results.AlreadyExists)
       case c: Click =>
         Effect.persist(Events.Clicked(id, c.userAgentHeader, c.xForwardedForHeader))
-          .thenReply(c.replyTo)(_ => Click.Results.RedirectTo(state.originalLinkUrl))
+          .thenReply(c.replyTo)(_ => Click.Results.RedirectTo(snapshot.originalLinkUrl))
       case ReceiveTimeout =>
         Effect.stop()
           .thenNoReply()
@@ -97,20 +97,20 @@ object ShortLink {
         Effect.noReply
     }
 
-    override def applyEvent(entity: Entity, event: Event)(implicit context: ActorContext[Command]): Entity = event match {
+    override def applyEvent(state: State, event: Event)(implicit context: ActorContext[Command]): State = event match {
       case _: Clicked =>
         //do nothing
-        entity
+        state
       case e =>
         context.log.warn(s"{}[id={}] received unexpected event[{}]", entityType, id, e)
-        entity
+        state
     }
   }
 
   def apply(id: String, config: Config): Behavior[Command] = Behaviors.setup { implicit context =>
     context.log.debug2("Starting entity actor {}[id={}]", entityType, id)
     context.setReceiveTimeout(receiveTimeout, ReceiveTimeout)
-    EventSourcedBehavior.withEnforcedReplies[Command, Event, Entity](
+    EventSourcedBehavior.withEnforcedReplies[Command, Event, State](
       PersistenceId.of("ShortLink", id),
       EmptyShortLink(id, config.getString("linkshortener.shortLink.domain")),
       (state, cmd) => {
