@@ -6,7 +6,7 @@ import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.{Effect, EventSourcedBehavior, ReplyEffect}
 import com.typesafe.config.Config
 import model.CborSerializable
-import model.shortLink.ShortLink.Commands.{Click, Create, ReceiveTimeout}
+import model.shortLink.ShortLink.Commands.{Click, Create, Stop}
 import model.shortLink.ShortLink.Events.{Clicked, Created}
 
 import java.time.Instant
@@ -35,7 +35,7 @@ object ShortLink {
         case object NotFound extends Result
       }
     }
-    case object ReceiveTimeout extends Command
+    case object Stop extends Command
   }
   sealed trait Event extends CborSerializable
   object Events {
@@ -63,7 +63,7 @@ object ShortLink {
       case c: Click =>
         Effect.stop()
           .thenReply(c.replyTo)(_ => Click.Results.NotFound)
-      case ReceiveTimeout =>
+      case Stop =>
         Effect.stop()
           .thenNoReply()
       case c =>
@@ -89,7 +89,7 @@ object ShortLink {
       case c: Click =>
         Effect.persist(Events.Clicked(id, c.userAgentHeader, c.xForwardedForHeader))
           .thenReply(c.replyTo)(_ => Click.Results.RedirectTo(snapshot.originalLinkUrl))
-      case ReceiveTimeout =>
+      case Stop =>
         Effect.stop()
           .thenNoReply()
       case c =>
@@ -109,9 +109,9 @@ object ShortLink {
 
   def apply(id: String, config: Config): Behavior[Command] = Behaviors.setup { implicit context =>
     context.log.debug2("Starting entity actor {}[id={}]", entityType, id)
-    context.setReceiveTimeout(receiveTimeout, ReceiveTimeout)
+    context.setReceiveTimeout(receiveTimeout, Stop)
     EventSourcedBehavior.withEnforcedReplies[Command, Event, State](
-      PersistenceId.of("ShortLink", id),
+      persistenceId(id),
       EmptyShortLink(id, config.getString("linkshortener.shortLink.domain")),
       (state, cmd) => {
         context.log.debug("{}[id={}] receives command {}", entityType, id, cmd)
@@ -123,4 +123,6 @@ object ShortLink {
       }
     ).withTagger(_ => Set("linkshortener", entityType, "v1"))
   }
+
+  def persistenceId(id: String): PersistenceId = PersistenceId.of(entityType, id)
 }
