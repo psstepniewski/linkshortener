@@ -14,9 +14,11 @@ class ShortLinkSpec extends ScalaTestWithActorTestKit(ConfigurationProvider.test
     system, ShortLink(shortLinkId, ConfigurationProvider.testConfig.underlying)
   )
 
+  private val shortLinkId2 = "testId-2"
+
   override protected def beforeEach(): Unit = {
     super.beforeEach()
-    eventSourcedTestKit.clear()
+    eventSourcedTestKit.persistenceTestKit.clearAll()
   }
 
   private val shortLinkDomain = ConfigurationProvider.testConfig.get[String]("linkshortener.shortLink.domain")
@@ -53,8 +55,8 @@ class ShortLinkSpec extends ScalaTestWithActorTestKit(ConfigurationProvider.test
       val result = eventSourcedTestKit.runCommand(ref => ShortLink.Commands.Create(originalLinkUrl, ref))
 
       Then("actor replies with AlreadyExists message")
-      result.reply mustBe theSameInstanceAs(ShortLink.Commands.Create.Results.AlreadyExists)
-      Then("actor doesn't persist any event")
+      result.reply  mustBe theSameInstanceAs(ShortLink.Commands.Create.Results.AlreadyExists)
+      Then("actor persisted single Created event (effect of first Create command from 'Given' block) ")
       result.events mustBe empty
     }
   }
@@ -82,19 +84,28 @@ class ShortLinkSpec extends ScalaTestWithActorTestKit(ConfigurationProvider.test
       event.xForwardedForHeader mustBe    Some(xForwardedFor)
     }
 
+    /*
+      For this test EventSourcedTestKit#runCommand cannot be used.
+      ShortLink actor stops after processing Create command if it already receives Create command. EventSourcedTestKit#runCommand
+      sends internal GetState message to actor after sending argument command. It results with timeout because
+      actor has already been stopped.
+     */
     "reply with NotFound if empty ShortLink is asked" in {
       Given("empty ShortLink actor")
-      // do nothing
+      val shortLink2 = spawn(ShortLink(shortLinkId2, ConfigurationProvider.testConfig.underlying))
+      //do nothing - defined above (val shortLink2)
+
       Given("empty User-Agent and X-Forwarder-For values")
       //do nothing
 
       When("Click message is send")
-      val result = eventSourcedTestKit.runCommand(ref => ShortLink.Commands.Click(None, None, ref))
+      val probe = createTestProbe[ShortLink.Commands.Click.Result]()
+      shortLink2 ! ShortLink.Commands.Click(None, None, probe.ref)
 
       Then("actor replies with NotFound message")
-      result.reply mustBe theSameInstanceAs(ShortLink.Commands.Click.Results.NotFound)
+      probe.expectMessage(ShortLink.Commands.Click.Results.NotFound)
       Then("actor doesn't persist any event")
-      result.events mustBe empty
+      eventSourcedTestKit.persistenceTestKit.expectNothingPersisted(ShortLink.persistenceId(shortLinkId2).id)
     }
   }
 }
