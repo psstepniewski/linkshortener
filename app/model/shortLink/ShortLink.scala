@@ -51,7 +51,7 @@ object ShortLink {
     def applyEvent(state: State, event: Event)(implicit context: ActorContext[Command]): State
   }
 
-  case class EmptyShortLink(id: String, shortLinkDomain: String) extends State {
+  case class EmptyState(id: String, shortLinkDomain: String) extends State {
 
     override def snapshot: Snapshot = throw new IllegalStateException(s"EmptyShortLink[$id] has not approved state yet.")
 
@@ -74,14 +74,14 @@ object ShortLink {
 
     override def applyEvent(state: State, event: Event)(implicit context: ActorContext[Command]): State = event match {
       case e: Created =>
-        ShortLink(e.shortLinkId, Snapshot(id, e.shortLinkDomain, e.shortLinkUrl, e.originalLinkUrl), shortLinkDomain)
+        ActiveState(e.shortLinkId, Snapshot(id, e.shortLinkDomain, e.shortLinkUrl, e.originalLinkUrl), shortLinkDomain)
       case e =>
         context.log.warn(s"{}[id={}, state=Empty] received unexpected event[{}]", entityType, id, e)
         state
     }
   }
 
-  case class ShortLink(id: String, snapshot: Snapshot, shortLinkDomain: String) extends State {
+  case class ActiveState(id: String, snapshot: Snapshot, shortLinkDomain: String) extends State {
 
     override def applyCommand(cmd: Command)(implicit context: ActorContext[Command]): ReplyEffect[Event, State] = cmd match {
       case c: Create =>
@@ -112,7 +112,7 @@ object ShortLink {
     context.setReceiveTimeout(receiveTimeout, Stop)
     EventSourcedBehavior.withEnforcedReplies[Command, Event, State](
       persistenceId(id),
-      EmptyShortLink(id, config.getString("linkshortener.shortLink.domain")),
+      EmptyState(id, config.getString("linkshortener.shortLink.domain")),
       (state, cmd) => {
         context.log.debug("{}[id={}] receives command {}", entityType, id, cmd)
         state.applyCommand(cmd)
