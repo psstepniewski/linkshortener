@@ -23,6 +23,7 @@ class ShortLinkSpec extends ScalaTestWithActorTestKit(ConfigurationProvider.test
 
   private val shortLinkDomain = ConfigurationProvider.testConfig.get[String]("linkshortener.shortLink.domain")
   private val originalLinkUrl = "https://stepniewski.tech/blog/post/4-linkshortener-with-akka-concept/"
+  private val originalLinkTags = Set("test", "v1")
 
   "ShortLink#Create" should {
 
@@ -31,7 +32,7 @@ class ShortLinkSpec extends ScalaTestWithActorTestKit(ConfigurationProvider.test
       // do nothing
 
       When("Create message is send")
-      val result = eventSourcedTestKit.runCommand(ref => ShortLink.Commands.Create(originalLinkUrl, ref))
+      val result = eventSourcedTestKit.runCommand(ref => ShortLink.Commands.Create(originalLinkUrl, originalLinkTags, ref))
 
       Then("actor replies with ShortLink in given domain and with given id")
       result.reply mustBe a[ShortLink.Commands.Create.Results.Created]
@@ -45,14 +46,16 @@ class ShortLinkSpec extends ScalaTestWithActorTestKit(ConfigurationProvider.test
       event.shortLinkId       mustEqual reply.shortLinkId
       event.shortLinkUrl      mustEqual reply.shortLinkUrl
       event.shortLinkDomain   mustEqual shortLinkDomain
+      event.tags              must      contain("test")
+      event.tags              must      contain("v1")
     }
 
     "reply with AlreadyExists if ShortLink with given id already exists" in {
       Given("non-empty ShortLink actor")
-      eventSourcedTestKit.runCommand(ref => ShortLink.Commands.Create(originalLinkUrl, ref))
+      eventSourcedTestKit.runCommand(ref => ShortLink.Commands.Create(originalLinkUrl, originalLinkTags, ref))
 
       When("Create message is send")
-      val result = eventSourcedTestKit.runCommand(ref => ShortLink.Commands.Create(originalLinkUrl, ref))
+      val result = eventSourcedTestKit.runCommand(ref => ShortLink.Commands.Create(originalLinkUrl, originalLinkTags, ref))
 
       Then("actor replies with AlreadyExists message")
       result.reply  mustBe theSameInstanceAs(ShortLink.Commands.Create.Results.AlreadyExists)
@@ -65,7 +68,7 @@ class ShortLinkSpec extends ScalaTestWithActorTestKit(ConfigurationProvider.test
 
     "reply with RedirectTo OriginalLink url" in {
       Given("non-empty ShortLink actor")
-      eventSourcedTestKit.runCommand(ref => ShortLink.Commands.Create(originalLinkUrl, ref))
+      eventSourcedTestKit.runCommand(ref => ShortLink.Commands.Create(originalLinkUrl, originalLinkTags, ref))
       Given("User-Agent and X-Forwarded-For non empty values")
       //do nothing - values are defined above
 

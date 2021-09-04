@@ -19,7 +19,7 @@ object ShortLink {
 
   sealed trait Command extends CborSerializable
   object Commands {
-    case class Create(originalLinkUrl: String, replyTo: ActorRef[Create.Result]) extends Command
+    case class Create(originalLinkUrl: String, tags: Set[String], replyTo: ActorRef[Create.Result]) extends Command
     case object Create {
       sealed trait Result extends CborSerializable
       object Results {
@@ -39,7 +39,7 @@ object ShortLink {
   }
   sealed trait Event extends CborSerializable
   object Events {
-    case class Created(shortLinkId: String, shortLinkDomain: String, shortLinkUrl: String, originalLinkUrl: String, timestamp: Instant = Instant.now()) extends Event
+    case class Created(shortLinkId: String, shortLinkDomain: String, shortLinkUrl: String, originalLinkUrl: String, tags: Set[String], timestamp: Instant = Instant.now()) extends Event
     case class Clicked(shortLinkId: String, userAgentHeader: Option[String], xForwardedForHeader: Option[String], timestamp: Instant = Instant.now()) extends Event
   }
 
@@ -58,7 +58,7 @@ object ShortLink {
     override def applyCommand(cmd: Command)(implicit context: ActorContext[Command]): ReplyEffect[Event, State] = cmd match {
       case c: Create =>
         val url = s"$shortLinkDomain${controllers.routes.ShortLinkController.getShortLink(id).url}"
-        Effect.persist(Events.Created(id, shortLinkDomain, url, c.originalLinkUrl))
+        Effect.persist(Events.Created(id, shortLinkDomain, url, c.originalLinkUrl, c.tags))
           .thenReply(c.replyTo)(_ => Create.Results.Created(id, url))
       case c: Click =>
         Effect.stop()

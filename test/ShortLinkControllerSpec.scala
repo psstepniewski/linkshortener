@@ -34,7 +34,8 @@ class ShortLinkControllerSpec extends PlaySpec with OneAppPerSuiteWithComponents
     override lazy val configuration: Configuration = ConfigurationProvider.testConfig.withFallback(context.initialConfiguration)
   }
 
-  val originalLinkUrl = "https://stepniewski.tech/blog/post/4-linkshortener-with-akka-concept/"
+  private val originalLinkUrl = "https://stepniewski.tech/blog/post/4-linkshortener-with-akka-concept/"
+  private val originalLinkTags = Set("test", "v1")
   var newShortLinkResponse: Option[Response] = None
 
   "ShortLinkController#postShortLinks" should {
@@ -43,7 +44,7 @@ class ShortLinkControllerSpec extends PlaySpec with OneAppPerSuiteWithComponents
       Given("fake request with originalLinkUrl")
       val request = FakeRequest("POST", "/api/v1/short_links")
         .withHeaders("Content-Type" -> "application/json")
-        .withBody(Json.toJson(PostShortLinks.Request(originalLinkUrl)))
+        .withBody(Json.toJson(PostShortLinks.Request(originalLinkUrl, originalLinkTags)))
 
       When("postShortLinks is requested")
       val result = route(app, request).get
@@ -63,7 +64,7 @@ class ShortLinkControllerSpec extends PlaySpec with OneAppPerSuiteWithComponents
       Given("fake request with originalLinkUrl")
       val request = FakeRequest("POST", "/api/v1/short_links_same_id")
         .withHeaders("Content-Type" -> "application/json")
-        .withBody(Json.toJson(PostShortLinks.Request(originalLinkUrl)))
+        .withBody(Json.toJson(PostShortLinks.Request(originalLinkUrl, originalLinkTags)))
       Given("controller which always generate the same shortLinkId")
       // nothing - controller is declared above
 
@@ -112,7 +113,7 @@ class ShortLinkControllerSpec extends PlaySpec with OneAppPerSuiteWithComponents
 
 object ShortLinkControllerSpec {
   object PostShortLinks {
-    case class Request(originalLinkUrl: String)
+    case class Request(originalLinkUrl: String, tags: Set[String])
     implicit val requestWrites: Writes[Request] = Json.writes[Request]
 
     case class Response(shortLinkId: String, shortLinkUrl: String)

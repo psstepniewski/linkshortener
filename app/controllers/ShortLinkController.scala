@@ -27,7 +27,7 @@ class ShortLinkController @Inject()(idGenerator: IdGenerator, cc: ControllerComp
   implicit val scheduler: Scheduler = actorSystem.toTyped.scheduler
 
   def postShortLinks: Action[JsValue] = Action(parse.json).async { implicit request =>
-    def iterate(originalLinkUrl: String, tryNumber: Int = 1, maxTriesNumber: Int = 3): Future[Result] = {
+    def iterate(originalLinkUrl: String, tags: Set[String], tryNumber: Int = 1, maxTriesNumber: Int = 3): Future[Result] = {
       logger.info(s"ShortLinkController#postShortLinks: create new ShortLink[tryNumber=$tryNumber, maxTriesNumber=$maxTriesNumber] for OriginalLink[url=$originalLinkUrl].")
       if(tryNumber > maxTriesNumber) {
         logger.warn(s"ShortLinkController#postShortLinks: tryNumber[$tryNumber] >= maxTriesNumber[$maxTriesNumber]. Returning 500.")
@@ -36,14 +36,14 @@ class ShortLinkController @Inject()(idGenerator: IdGenerator, cc: ControllerComp
       else {
         val id = idGenerator.newId
         shortLink(id, config).flatMap( ref =>
-          ref.ask(replyTo => ShortLink.Commands.Create(originalLinkUrl, replyTo))
+          ref.ask(replyTo => ShortLink.Commands.Create(originalLinkUrl, tags, replyTo))
             .flatMap {
               case v: ShortLink.Commands.Create.Results.Created =>
                 logger.info(s"ShortLinkController#postShortLinks: new ShortLink[id=$id] created. Returning 200.")
                 Future.successful(Ok(PostShortLinks.Response(v.shortLinkId, v.shortLinkUrl)))
               case ShortLink.Commands.Create.Results.AlreadyExists =>
                 logger.info(s"ShortLinkController#postShortLinks: Id[$id] taken. Starts new Iteration[tryNumber=$tryNumber].")
-                iterate(originalLinkUrl, tryNumber + 1)
+                iterate(originalLinkUrl, tags, tryNumber + 1)
               case e =>
                 logger.error(s"ShortLinkController#postShortLinks: Got unexpected message[$e]. Returning 500.")
                 Future.successful(InternalServerError)
@@ -54,7 +54,7 @@ class ShortLinkController @Inject()(idGenerator: IdGenerator, cc: ControllerComp
 
     request.body.validate[PostShortLinks.Request] match {
       case JsSuccess(req, _) =>
-        iterate(req.originalLinkUrl)
+        iterate(req.originalLinkUrl, req.tags)
           .recover{case e =>
             logger.error(s"ShortLinkController#postShortLinks: unexpected error. Returning 500.", e)
             InternalServerError
@@ -93,7 +93,7 @@ class ShortLinkController @Inject()(idGenerator: IdGenerator, cc: ControllerComp
 object ShortLinkController {
 
   private[ShortLinkController] object PostShortLinks {
-    case class Request(originalLinkUrl: String)
+    case class Request(originalLinkUrl: String, tags: Set[String])
     implicit val requestReads: Reads[Request] = Json.reads[Request]
 
     case class Response(shortLinkId: String, shortLinkUrl: String)

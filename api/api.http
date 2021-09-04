@@ -2,7 +2,8 @@ POST {{host}}/api/v1/short_links
 Content-Type: application/json
 
 {
-  "originalLinkUrl": "https://stepniewski.tech/blog/post/4-linkshortener-with-akka-concept/"
+  "originalLinkUrl": "https://stepniewski.tech/blog/post/4-linkshortener-with-akka-concept/",
+  "tags": ["test", "v1"]
 }
 
 ###
