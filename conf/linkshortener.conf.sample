@@ -1,3 +1,5 @@
+play.http.secret.key="changeme"
+
 linkshortener {
     db {
         host = "localhost"

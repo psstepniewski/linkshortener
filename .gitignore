@@ -14,6 +14,6 @@ dist
 /RUNNING_PID
 /.settings
 
-conf/application-local.conf
+conf/linkshortener.conf
 */http-client.private.env.json
 .bsp/
