@@ -17,3 +17,5 @@ dist
 conf/linkshortener.conf
 */http-client.private.env.json
 .bsp/
+docker/target/*
+docker/ssh-key/*
