@@ -1,9 +1,8 @@
 name := "linkshortener"
- 
-version := "1.0" 
+maintainer := "pawel@stepniewski.tech"
+Universal / packageName := "linkshortener"
       
 lazy val `linkshortener` = (project in file(".")).enablePlugins(PlayScala)
-
       
 resolvers += "Akka Snapshot Repository" at "https://repo.akka.io/snapshots/"
       
