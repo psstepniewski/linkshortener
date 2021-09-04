@@ -57,7 +57,7 @@ object ShortLink {
 
     override def applyCommand(cmd: Command)(implicit context: ActorContext[Command]): ReplyEffect[Event, State] = cmd match {
       case c: Create =>
-        val url = s"$shortLinkDomain${controllers.routes.ShortLinkController.getShortLink(id).url}"
+        val url = s"$shortLinkDomain/$id"
         Effect.persist(Events.Created(id, shortLinkDomain, url, c.originalLinkUrl, c.tags))
           .thenReply(c.replyTo)(_ => Create.Results.Created(id, url))
       case c: Click =>

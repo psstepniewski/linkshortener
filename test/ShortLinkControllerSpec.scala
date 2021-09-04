@@ -55,8 +55,7 @@ class ShortLinkControllerSpec extends PlaySpec with OneAppPerSuiteWithComponents
       Then("response contains of ShortLink id and url ")
       contentAsJson(result).validate[Response]  mustBe a[JsSuccess[_]]
       val response = contentAsJson(result).validate[Response].get
-      response.shortLinkUrl                     must startWith(components.configuration.get[String]("linkshortener.shortLink.domain"))
-
+      response.shortLinkUrl                     must equal(s"${components.configuration.get[String]("linkshortener.shortLink.domain")}/${response.shortLinkId}")
       newShortLinkResponse = Some(response)
     }
 
