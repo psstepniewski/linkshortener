@@ -14,7 +14,7 @@ import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
 object ShortLink {
 
-  private val entityType = "ShortLink"
+  val entityType = "ShortLink"
   private val receiveTimeout: FiniteDuration = 30.seconds
 
   sealed trait Command extends CborSerializable
