@@ -4,17 +4,17 @@ import akka.actor.ActorSystem
 import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
 import akka.persistence.jdbc.query.scaladsl.JdbcReadJournal
 import akka.persistence.query.Offset
-import akka.projection.{ProjectionBehavior, ProjectionId}
 import akka.projection.eventsourced.EventEnvelope
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import akka.projection.jdbc.scaladsl.{JdbcHandler, JdbcProjection}
-import akka.projection.scaladsl.{AtLeastOnceProjection, SourceProvider}
+import akka.projection.scaladsl.{ExactlyOnceProjection, SourceProvider}
+import akka.projection.{ProjectionBehavior, ProjectionId}
+import anorm.SqlStringInterpolation
 import model.shortLink.ShortLink
 import play.api.Logging
-import ShortLinkProjection.EventHandler
 import projection.JdbcSessionFactory
+import projection.shortLink.ShortLinkProjection.EventHandler
 
-import scala.concurrent.duration._
 import javax.inject.{Inject, Singleton}
 
 @Singleton
@@ -24,14 +24,12 @@ class ShortLinkProjection @Inject()(actorSystem: ActorSystem, jdbcSessionFactory
     EventSourcedProvider
       .eventsByTag[ShortLink.Event](actorSystem.toTyped, readJournalPluginId = JdbcReadJournal.Identifier, tag = ShortLink.entityType)
 
-  private val projection: AtLeastOnceProjection[Offset, EventEnvelope[ShortLink.Event]] =
-    JdbcProjection.atLeastOnce(
+  private val projection: ExactlyOnceProjection[Offset, EventEnvelope[ShortLink.Event]] =
+    JdbcProjection.exactlyOnce(
         projectionId = ProjectionId(ShortLink.entityType, "postgres"),
         sourceProvider,
         () => jdbcSessionFactory.create(),
-        handler = () => new EventHandler())(actorSystem.toTyped
-    )
-    .withSaveOffset(afterEnvelopes = 100, afterDuration = 500.millis)
+        handler = () => new EventHandler())(actorSystem.toTyped)
 
   actorSystem.spawn(ProjectionBehavior(projection), projection.projectionId.id)
 }
@@ -41,9 +39,24 @@ object ShortLinkProjection {
   class EventHandler() extends JdbcHandler[EventEnvelope[ShortLink.Event], JdbcSessionFactory.JdbcSession] with Logging {
 
     override def process(session: JdbcSessionFactory.JdbcSession, envelope: EventEnvelope[ShortLink.Event]): Unit = {
+      logger.info(s"ShortLinkProjection receives ${envelope.event}.")
       envelope.event match {
-        case anyEvent =>
-          logger.info(s"ShortLinkProjection receives $anyEvent.")
+        case e: ShortLink.Events.Created =>
+          session.withConnection(implicit conn => {
+            SQL"""
+              insert into short_links(short_link_id, short_link_domain, short_link_url, original_link_url, tags, created_timestamp)
+              values (${e.shortLinkId}, ${e.shortLinkDomain}, ${e.shortLinkUrl}, ${e.originalLinkUrl}, ${e.tags.mkString(",")}, ${e.timestamp})
+            """.executeInsert()
+          })
+        case e: ShortLink.Events.Clicked =>
+          session.withConnection(implicit conn => {
+            SQL"""
+              insert into short_link_clicks(short_link_id, user_agent_header, x_forwarded_for_header, created_timestamp)
+              values (${e.shortLinkId}, ${e.userAgentHeader}, ${e.xForwardedForHeader}, ${e.timestamp})
+            """.executeInsert()
+          })
+        case other =>
+          logger.info(s"ShortLinkProjection receives $other.")
       }
     }
   }

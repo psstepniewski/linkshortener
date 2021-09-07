@@ -27,6 +27,8 @@ libraryDependencies ++= Seq(
   "com.lightbend.akka" %% "akka-projection-eventsourced" % akkaProjectionVersion,
   "com.lightbend.akka" %% "akka-projection-jdbc" % akkaProjectionVersion,
 
+  "org.playframework.anorm" %% "anorm" % "2.6.10",
+
   "com.typesafe.akka" %% "akka-persistence-testkit" % akkaVersion % Test,
   "org.scalatestplus.play" %% "scalatestplus-play" % "5.1.0" % Test
 )
