@@ -69,8 +69,9 @@ class ShortLinkController @Inject()(idGenerator: IdGenerator, cc: ControllerComp
     logger.info(s"ShortLinkController#getShortLink: ShortLink[id=$shortLinkId] clicked, get OriginalLink url.")
     val userAgentHeader = request.headers.get(USER_AGENT)
     val xForwardedForHeader = request.headers.get(X_FORWARDED_FOR)
+    val refererHeader = request.headers.get(REFERER)
     shortLink(shortLinkId, config).flatMap(ref =>
-      ref.ask(replyTo => ShortLink.Commands.Click(userAgentHeader, xForwardedForHeader, replyTo))
+      ref.ask(replyTo => ShortLink.Commands.Click(userAgentHeader, xForwardedForHeader, refererHeader, replyTo))
         .map {
           case v: ShortLink.Commands.Click.Results.RedirectTo =>
             logger.info(s"ShortLinkController#getShortLink: OriginalLink for ShortLink[id=$shortLinkId] found. Returning 303 to OriginalLink url.")

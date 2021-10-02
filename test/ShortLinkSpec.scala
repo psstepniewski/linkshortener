@@ -10,6 +10,7 @@ class ShortLinkSpec extends ScalaTestWithActorTestKit(ConfigurationProvider.test
   private val shortLinkId = "testId"
   private val userAgent = "Mozilla/5.0 (platform; rv:geckoversion) Gecko/geckotrail Firefox/firefoxversion"
   private val xForwardedFor = "203.0.113.195, 70.41.3.18, 150.172.238.178"
+  private val refferer = "https://example.com/"
   private val eventSourcedTestKit = EventSourcedBehaviorTestKit[ShortLink.Command, ShortLink.Event, ShortLink.Snapshot](
     system, ShortLink(shortLinkId, ConfigurationProvider.testConfig.underlying)
   )
@@ -73,7 +74,7 @@ class ShortLinkSpec extends ScalaTestWithActorTestKit(ConfigurationProvider.test
       //do nothing - values are defined above
 
       When("Click message is send")
-      val result = eventSourcedTestKit.runCommand(ref => ShortLink.Commands.Click(Some(userAgent), Some(xForwardedFor), ref))
+      val result = eventSourcedTestKit.runCommand(ref => ShortLink.Commands.Click(Some(userAgent), Some(xForwardedFor), Some(refferer), ref))
 
       Then("actor replies with OriginalLink url")
       result.reply mustBe a[ShortLink.Commands.Click.Results.RedirectTo]
@@ -85,6 +86,7 @@ class ShortLinkSpec extends ScalaTestWithActorTestKit(ConfigurationProvider.test
       event.shortLinkId         mustEqual shortLinkId
       event.userAgentHeader     mustBe    Some(userAgent)
       event.xForwardedForHeader mustBe    Some(xForwardedFor)
+      event.refererHeader       mustBe    Some(refferer)
     }
 
     /*
@@ -103,7 +105,7 @@ class ShortLinkSpec extends ScalaTestWithActorTestKit(ConfigurationProvider.test
 
       When("Click message is send")
       val probe = createTestProbe[ShortLink.Commands.Click.Result]()
-      shortLink2 ! ShortLink.Commands.Click(None, None, probe.ref)
+      shortLink2 ! ShortLink.Commands.Click(None, None, None, probe.ref)
 
       Then("actor replies with NotFound message")
       probe.expectMessage(ShortLink.Commands.Click.Results.NotFound)

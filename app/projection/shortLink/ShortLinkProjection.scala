@@ -51,8 +51,8 @@ object ShortLinkProjection {
         case e: ShortLink.Events.Clicked =>
           session.withConnection(implicit conn => {
             SQL"""
-              insert into short_link_clicks(short_link_id, user_agent_header, x_forwarded_for_header, created_timestamp)
-              values (${e.shortLinkId}, ${e.userAgentHeader}, ${e.xForwardedForHeader}, ${e.timestamp})
+              insert into short_link_clicks(short_link_id, user_agent_header, x_forwarded_for_header, referer_header, created_timestamp)
+              values (${e.shortLinkId}, ${e.userAgentHeader}, ${e.xForwardedForHeader}, ${e.refererHeader}, ${e.timestamp})
             """.executeInsert()
           })
         case other =>
