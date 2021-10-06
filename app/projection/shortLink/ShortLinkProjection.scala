@@ -22,11 +22,11 @@ class ShortLinkProjection @Inject()(actorSystem: ActorSystem, jdbcSessionFactory
 
   private val sourceProvider: SourceProvider[Offset, EventEnvelope[ShortLink.Event]] =
     EventSourcedProvider
-      .eventsByTag[ShortLink.Event](actorSystem.toTyped, readJournalPluginId = JdbcReadJournal.Identifier, tag = ShortLink.entityType)
+      .eventsByTag[ShortLink.Event](actorSystem.toTyped, readJournalPluginId = JdbcReadJournal.Identifier, tag = ShortLink.TypeKey.name)
 
   private val projection: ExactlyOnceProjection[Offset, EventEnvelope[ShortLink.Event]] =
     JdbcProjection.exactlyOnce(
-        projectionId = ProjectionId(ShortLink.entityType, "postgres"),
+        projectionId = ProjectionId(ShortLink.TypeKey.name, "postgres"),
         sourceProvider,
         () => jdbcSessionFactory.create(),
         handler = () => new EventHandler())(actorSystem.toTyped)

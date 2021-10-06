@@ -21,6 +21,7 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-persistence-query" % akkaVersion,
   "com.typesafe.akka" %% "akka-persistence-typed" % akkaVersion,
   "com.typesafe.akka" %% "akka-serialization-jackson" % akkaVersion,
+  "com.typesafe.akka"  %% "akka-cluster-sharding-typed" % akkaVersion,
   "com.lightbend.akka" %% "akka-persistence-jdbc" % "5.0.1",
 
   "com.lightbend.akka" %% "akka-projection-core" % akkaProjectionVersion,

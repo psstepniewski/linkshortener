@@ -2,6 +2,7 @@ package model.shortLink
 
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors, LoggerOps}
 import akka.actor.typed.{ActorRef, Behavior}
+import akka.cluster.sharding.typed.scaladsl.{EntityContext, EntityTypeKey}
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.{Effect, EventSourcedBehavior, ReplyEffect}
 import com.typesafe.config.Config
@@ -14,7 +15,8 @@ import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
 object ShortLink {
 
-  val entityType = "ShortLink"
+  val TypeKey: EntityTypeKey[Command] = EntityTypeKey[Command]("ShortLink")
+
   private val receiveTimeout: FiniteDuration = 30.seconds
 
   sealed trait Command extends CborSerializable
@@ -67,7 +69,7 @@ object ShortLink {
         Effect.stop()
           .thenNoReply()
       case c =>
-        context.log.warn("{}[id={}, state=Empty] received unknown command[{}].", entityType, id, c)
+        context.log.warn("{}[id={}, state=Empty] received unknown command[{}].", TypeKey.name, id, c)
         Effect.stop()
           .thenNoReply()
     }
@@ -76,7 +78,7 @@ object ShortLink {
       case e: Created =>
         ActiveState(e.shortLinkId, Snapshot(id, e.shortLinkDomain, e.shortLinkUrl, e.originalLinkUrl), shortLinkDomain)
       case e =>
-        context.log.warn(s"{}[id={}, state=Empty] received unexpected event[{}]", entityType, id, e)
+        context.log.warn(s"{}[id={}, state=Empty] received unexpected event[{}]", TypeKey.name, id, e)
         state
     }
   }
@@ -93,7 +95,7 @@ object ShortLink {
         Effect.stop()
           .thenNoReply()
       case c =>
-        context.log.warn("{}[id={}] unknown command[{}].", entityType, id, c)
+        context.log.warn("{}[id={}] unknown command[{}].", TypeKey.name, id, c)
         Effect.noReply
     }
 
@@ -102,27 +104,27 @@ object ShortLink {
         //do nothing
         state
       case e =>
-        context.log.warn(s"{}[id={}] received unexpected event[{}]", entityType, id, e)
+        context.log.warn(s"{}[id={}] received unexpected event[{}]", TypeKey.name, id, e)
         state
     }
   }
 
   def apply(id: String, config: Config): Behavior[Command] = Behaviors.setup { implicit context =>
-    context.log.debug2("Starting entity actor {}[id={}]", entityType, id)
+    context.log.debug2("Starting entity actor {}[id={}]", TypeKey.name, id)
     context.setReceiveTimeout(receiveTimeout, Stop)
     EventSourcedBehavior.withEnforcedReplies[Command, Event, State](
       persistenceId(id),
       EmptyState(id, config.getString("linkshortener.shortLink.domain")),
       (state, cmd) => {
-        context.log.debug("{}[id={}] receives command {}", entityType, id, cmd)
+        context.log.debug("{}[id={}] receives command {}", TypeKey.name, id, cmd)
         state.applyCommand(cmd)
       },
       (state, event) => {
-        context.log.debug("{}[id={}] persists event {}", entityType, id, event)
+        context.log.debug("{}[id={}] persists event {}", TypeKey.name, id, event)
         state.applyEvent(state, event)
       }
-    ).withTagger(_ => Set("linkshortener", entityType, "v1"))
+    ).withTagger(_ => Set("linkshortener", TypeKey.name, "v1"))
   }
 
-  def persistenceId(id: String): PersistenceId = PersistenceId.of(entityType, id)
+  def persistenceId(id: String): PersistenceId = PersistenceId.of(TypeKey.name, id)
 }

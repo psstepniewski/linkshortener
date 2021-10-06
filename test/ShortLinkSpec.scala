@@ -11,6 +11,7 @@ class ShortLinkSpec extends ScalaTestWithActorTestKit(ConfigurationProvider.test
   private val userAgent = "Mozilla/5.0 (platform; rv:geckoversion) Gecko/geckotrail Firefox/firefoxversion"
   private val xForwardedFor = "203.0.113.195, 70.41.3.18, 150.172.238.178"
   private val refferer = "https://example.com/"
+
   private val eventSourcedTestKit = EventSourcedBehaviorTestKit[ShortLink.Command, ShortLink.Event, ShortLink.Snapshot](
     system, ShortLink(shortLinkId, ConfigurationProvider.testConfig.underlying)
   )

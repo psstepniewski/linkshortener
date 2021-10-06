@@ -2,13 +2,11 @@ package controllers
 
 import akka.actor.ActorSystem
 import akka.actor.typed.Scheduler
-import akka.actor.typed.scaladsl.AskPattern.Askable
 import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
 import akka.util.{ByteString, Timeout}
-import com.typesafe.config.Config
 import controllers.ShortLinkController.PostShortLinks
 import model.IdGenerator
-import model.shortLink.{ShortLink, WithShortLink}
+import model.shortLink.{ShortLink, ShortLinkSharding}
 import play.api.Logging
 import play.api.http.Writeable
 import play.api.libs.json._
@@ -20,8 +18,8 @@ import scala.concurrent.duration.DurationInt
 import scala.concurrent.{ExecutionContext, Future}
 
 @Singleton
-class ShortLinkController @Inject()(idGenerator: IdGenerator, cc: ControllerComponents, override val actorSystem: ActorSystem, config: Config)(implicit ec: ExecutionContext)
-  extends AbstractController(cc) with Logging with WithShortLink {
+class ShortLinkController @Inject()(idGenerator: IdGenerator, shortLinkSharding: ShortLinkSharding, cc: ControllerComponents, actorSystem: ActorSystem)(implicit ec: ExecutionContext)
+  extends AbstractController(cc) with Logging {
 
   implicit val timeout: Timeout = 20.seconds
   implicit val scheduler: Scheduler = actorSystem.toTyped.scheduler
@@ -35,20 +33,22 @@ class ShortLinkController @Inject()(idGenerator: IdGenerator, cc: ControllerComp
       }
       else {
         val id = idGenerator.newId
-        shortLink(id, config).flatMap( ref =>
-          ref.ask(replyTo => ShortLink.Commands.Create(originalLinkUrl, tags, replyTo))
-            .flatMap {
-              case v: ShortLink.Commands.Create.Results.Created =>
-                logger.info(s"ShortLinkController#postShortLinks: new ShortLink[id=$id] created. Returning 200.")
-                Future.successful(Ok(PostShortLinks.Response(v.shortLinkId, v.shortLinkUrl)))
-              case ShortLink.Commands.Create.Results.AlreadyExists =>
-                logger.info(s"ShortLinkController#postShortLinks: Id[$id] taken. Starts new Iteration[tryNumber=$tryNumber].")
-                iterate(originalLinkUrl, tags, tryNumber + 1)
-              case e =>
-                logger.error(s"ShortLinkController#postShortLinks: Got unexpected message[$e]. Returning 500.")
-                Future.successful(InternalServerError)
-            }
-        )
+        shortLinkSharding.entityRefFor(id).ask(replyTo => ShortLink.Commands.Create(originalLinkUrl, tags, replyTo))
+          .flatMap {
+            case v: ShortLink.Commands.Create.Results.Created =>
+              logger.info(s"ShortLinkController#postShortLinks: new ShortLink[id=$id] created. Returning 200.")
+              Future.successful(Ok(PostShortLinks.Response(v.shortLinkId, v.shortLinkUrl)))
+            case ShortLink.Commands.Create.Results.AlreadyExists =>
+              logger.info(s"ShortLinkController#postShortLinks: Id[$id] taken. Starts new Iteration[tryNumber=$tryNumber].")
+              iterate(originalLinkUrl, tags, tryNumber + 1)
+            case e =>
+              logger.error(s"ShortLinkController#postShortLinks: Got unexpected message[$e]. Returning 500.")
+              Future.successful(InternalServerError)
+          }
+          .recover{case e =>
+            logger.error(s"ShortLinkController#postShortLinks: unexpected error. Returning 500.", e)
+            InternalServerError
+          }
       }
     }
 
@@ -70,24 +70,22 @@ class ShortLinkController @Inject()(idGenerator: IdGenerator, cc: ControllerComp
     val userAgentHeader = request.headers.get(USER_AGENT)
     val xForwardedForHeader = request.headers.get(X_FORWARDED_FOR)
     val refererHeader = request.headers.get(REFERER)
-    shortLink(shortLinkId, config).flatMap(ref =>
-      ref.ask(replyTo => ShortLink.Commands.Click(userAgentHeader, xForwardedForHeader, refererHeader, replyTo))
-        .map {
-          case v: ShortLink.Commands.Click.Results.RedirectTo =>
-            logger.info(s"ShortLinkController#getShortLink: OriginalLink for ShortLink[id=$shortLinkId] found. Returning 303 to OriginalLink url.")
-            Redirect(v.originalLinkUrl)
-          case ShortLink.Commands.Click.Results.NotFound =>
-            logger.info(s"ShortLinkController#getShortLink: OriginalLink for ShortLink[id=$shortLinkId] NOT found. Returning 404.")
-            NotFound
-          case e =>
-            logger.error(s"ShortLinkController#getShortLink: Got unexpected message[$e]. Returning 500.")
-            InternalServerError
-        }
-        .recover{case e =>
-          logger.error(s"ShortLinkController#getShortLink: unexpected error. Returning 500.", e)
+    shortLinkSharding.entityRefFor(shortLinkId).ask(replyTo => ShortLink.Commands.Click(userAgentHeader, xForwardedForHeader, refererHeader, replyTo))
+      .map {
+        case v: ShortLink.Commands.Click.Results.RedirectTo =>
+          logger.info(s"ShortLinkController#getShortLink: OriginalLink for ShortLink[id=$shortLinkId] found. Returning 303 to OriginalLink url.")
+          Redirect(v.originalLinkUrl)
+        case ShortLink.Commands.Click.Results.NotFound =>
+          logger.info(s"ShortLinkController#getShortLink: OriginalLink for ShortLink[id=$shortLinkId] NOT found. Returning 404.")
+          NotFound
+        case e =>
+          logger.error(s"ShortLinkController#getShortLink: Got unexpected message[$e]. Returning 500.")
           InternalServerError
-        }
-    )
+      }
+      .recover{case e =>
+        logger.error(s"ShortLinkController#getShortLink: unexpected error. Returning 500.", e)
+        InternalServerError
+      }
   }
 }
 
