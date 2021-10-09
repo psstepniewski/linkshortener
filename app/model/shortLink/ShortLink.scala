@@ -2,7 +2,7 @@ package model.shortLink
 
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors, LoggerOps}
 import akka.actor.typed.{ActorRef, Behavior}
-import akka.cluster.sharding.typed.scaladsl.{EntityContext, EntityTypeKey}
+import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.{Effect, EventSourcedBehavior, ReplyEffect}
 import com.typesafe.config.Config
