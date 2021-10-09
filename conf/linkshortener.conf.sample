@@ -27,9 +27,4 @@ akka {
   }
 }
 
-
-include "0_play.conf"
-include "1_akka-persistence.conf"
-include "2_flyway.conf"
-include "3_akka-projection.conf"
-include "4_akka-cluster.conf"
+include "0_post-conf-includes.conf"
