@@ -1,11 +1,11 @@
-import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
+import akka.actor.testkit.typed.scaladsl.{ActorTestKit, ScalaTestWithActorTestKit}
 import akka.persistence.testkit.scaladsl.EventSourcedBehaviorTestKit
 import model.shortLink.ShortLink
 import org.scalatest.matchers.must.Matchers.convertToAnyMustWrapper
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.scalatest.{BeforeAndAfterEach, GivenWhenThen}
 
-class ShortLinkSpec extends ScalaTestWithActorTestKit(ConfigurationProvider.testConfig.underlying) with AnyWordSpecLike with BeforeAndAfterEach with GivenWhenThen {
+class ShortLinkSpec extends ScalaTestWithActorTestKit(ActorTestKit("application", ConfigurationProvider.testConfig.underlying)) with AnyWordSpecLike with BeforeAndAfterEach with GivenWhenThen {
 
   private val shortLinkId = "testId"
   private val userAgent = "Mozilla/5.0 (platform; rv:geckoversion) Gecko/geckotrail Firefox/firefoxversion"

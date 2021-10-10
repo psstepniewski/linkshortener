@@ -1,5 +1,5 @@
-import ShortLinkControllerSpec.{PostShortLinks, ReturnGivenId}
 import ShortLinkControllerSpec.PostShortLinks.{Response, requestWrites}
+import ShortLinkControllerSpec.{PostShortLinks, ReturnGivenId}
 import akka.util.Timeout
 import controllers.ShortLinkController
 import model.shortLink.ShortLinkSharding
@@ -20,6 +20,8 @@ class ShortLinkControllerSpec extends PlaySpec with OneAppPerSuiteWithComponents
 
   implicit val timeout: Timeout = 5.seconds
 
+//  Don't use `components` in test body (it will cause `Address already in use` error), try to use `app` reference instead (for example `app.configuration`).
+//  Every call of 'components' starts new application instance.
   override def components: BuiltInComponents =  new BuiltInComponentsFromContext(context) with NoHttpFiltersComponents {
 
     private val shortLinkSharding = new ShortLinkSharding(actorSystem, configuration.underlying)
@@ -57,7 +59,7 @@ class ShortLinkControllerSpec extends PlaySpec with OneAppPerSuiteWithComponents
       Then("response contains of ShortLink id and url ")
       contentAsJson(result).validate[Response]  mustBe a[JsSuccess[_]]
       val response = contentAsJson(result).validate[Response].get
-      response.shortLinkUrl                     must equal(s"${components.configuration.get[String]("linkshortener.shortLink.domain")}/${response.shortLinkId}")
+      response.shortLinkUrl                     must equal(s"${app.configuration.get[String]("linkshortener.shortLink.domain")}/${response.shortLinkId}")
       newShortLinkResponse = Some(response)
     }
 
