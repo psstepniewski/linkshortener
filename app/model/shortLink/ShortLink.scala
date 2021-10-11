@@ -1,13 +1,13 @@
 package model.shortLink
 
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors, LoggerOps}
-import akka.actor.typed.{ActorRef, Behavior}
-import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
+import akka.actor.typed.{ActorRef, Behavior, PostStop}
+import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, EntityTypeKey}
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.{Effect, EventSourcedBehavior, ReplyEffect}
 import com.typesafe.config.Config
 import model.CborSerializable
-import model.shortLink.ShortLink.Commands.{Click, Create, Stop}
+import model.shortLink.ShortLink.Commands.{Click, Create, Passivate}
 import model.shortLink.ShortLink.Events.{Clicked, Created}
 
 import java.time.Instant
@@ -37,7 +37,7 @@ object ShortLink {
         case object NotFound extends Result
       }
     }
-    case object Stop extends Command
+    case object Passivate extends Command
   }
   sealed trait Event extends CborSerializable
   object Events {
@@ -51,9 +51,10 @@ object ShortLink {
     def snapshot: Snapshot
     def applyCommand(cmd: Command)(implicit context: ActorContext[Command]): ReplyEffect[Event, State]
     def applyEvent(state: State, event: Event)(implicit context: ActorContext[Command]): State
+    def shard: ActorRef[ClusterSharding.ShardCommand]
   }
 
-  case class EmptyState(id: String, shortLinkDomain: String) extends State {
+  case class EmptyState(id: String, shard: ActorRef[ClusterSharding.ShardCommand], shortLinkDomain: String) extends State {
 
     override def snapshot: Snapshot = throw new IllegalStateException(s"EmptyShortLink[$id] has not approved state yet.")
 
@@ -63,27 +64,27 @@ object ShortLink {
         Effect.persist(Events.Created(id, shortLinkDomain, url, c.originalLinkUrl, c.tags))
           .thenReply(c.replyTo)(_ => Create.Results.Created(id, url))
       case c: Click =>
-        Effect.stop()
-          .thenReply(c.replyTo)(_ => Click.Results.NotFound)
-      case Stop =>
-        Effect.stop()
-          .thenNoReply()
+        context.self ! Passivate
+        Effect.reply(c.replyTo)(Click.Results.NotFound)
+      case Passivate =>
+        shard ! ClusterSharding.Passivate(context.self)
+        Effect.noReply
       case c =>
         context.log.warn("{}[id={}, state=Empty] received unknown command[{}].", TypeKey.name, id, c)
-        Effect.stop()
-          .thenNoReply()
+        context.self ! Passivate
+        Effect.noReply
     }
 
     override def applyEvent(state: State, event: Event)(implicit context: ActorContext[Command]): State = event match {
       case e: Created =>
-        ActiveState(e.shortLinkId, Snapshot(id, e.shortLinkDomain, e.shortLinkUrl, e.originalLinkUrl), shortLinkDomain)
+        ActiveState(e.shortLinkId, state.shard, Snapshot(id, e.shortLinkDomain, e.shortLinkUrl, e.originalLinkUrl), shortLinkDomain)
       case e =>
         context.log.warn(s"{}[id={}, state=Empty] received unexpected event[{}]", TypeKey.name, id, e)
         state
     }
   }
 
-  case class ActiveState(id: String, snapshot: Snapshot, shortLinkDomain: String) extends State {
+  case class ActiveState(id: String, shard: ActorRef[ClusterSharding.ShardCommand], snapshot: Snapshot, shortLinkDomain: String) extends State {
 
     override def applyCommand(cmd: Command)(implicit context: ActorContext[Command]): ReplyEffect[Event, State] = cmd match {
       case c: Create =>
@@ -91,9 +92,9 @@ object ShortLink {
       case c: Click =>
         Effect.persist(Events.Clicked(id, c.userAgentHeader, c.xForwardedForHeader, c.refererHeader))
           .thenReply(c.replyTo)(_ => Click.Results.RedirectTo(snapshot.originalLinkUrl))
-      case Stop =>
-        Effect.stop()
-          .thenNoReply()
+      case Passivate =>
+        shard ! ClusterSharding.Passivate(context.self)
+        Effect.noReply
       case c =>
         context.log.warn("{}[id={}] unknown command[{}].", TypeKey.name, id, c)
         Effect.noReply
@@ -109,12 +110,12 @@ object ShortLink {
     }
   }
 
-  def apply(id: String, config: Config): Behavior[Command] = Behaviors.setup { implicit context =>
+  def apply(id: String, shard: ActorRef[ClusterSharding.ShardCommand], config: Config): Behavior[Command] = Behaviors.setup { implicit context =>
     context.log.debug2("Starting entity actor {}[id={}]", TypeKey.name, id)
-    context.setReceiveTimeout(receiveTimeout, Stop)
+    context.setReceiveTimeout(receiveTimeout, Passivate)
     EventSourcedBehavior.withEnforcedReplies[Command, Event, State](
       persistenceId(id),
-      EmptyState(id, config.getString("linkshortener.shortLink.domain")),
+      EmptyState(id, shard, config.getString("linkshortener.shortLink.domain")),
       (state, cmd) => {
         context.log.debug("{}[id={}] receives command {}", TypeKey.name, id, cmd)
         state.applyCommand(cmd)
@@ -123,7 +124,11 @@ object ShortLink {
         context.log.debug("{}[id={}] persists event {}", TypeKey.name, id, event)
         state.applyEvent(state, event)
       }
-    ).withTagger(_ => Set("linkshortener", TypeKey.name, "v1"))
+    )
+    .withTagger(_ => Set("linkshortener", TypeKey.name, "v1"))
+    .receiveSignal {
+      case (_, PostStop) => context.log.info(s"ShortLink[id=$id] receives PostStop signal")
+    }
   }
 
   def persistenceId(id: String): PersistenceId = PersistenceId.of(TypeKey.name, id)

@@ -1,4 +1,6 @@
 import akka.actor.testkit.typed.scaladsl.{ActorTestKit, ScalaTestWithActorTestKit}
+import akka.actor.typed.ActorRef
+import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.persistence.testkit.scaladsl.EventSourcedBehaviorTestKit
 import model.shortLink.ShortLink
 import org.scalatest.matchers.must.Matchers.convertToAnyMustWrapper
@@ -12,8 +14,9 @@ class ShortLinkSpec extends ScalaTestWithActorTestKit(ActorTestKit("application"
   private val xForwardedFor = "203.0.113.195, 70.41.3.18, 150.172.238.178"
   private val referer = "https://example.com/"
 
+  val shardMock: ActorRef[ClusterSharding.ShardCommand] = spawn(ShardTest.ShardMock())
   private val eventSourcedTestKit = EventSourcedBehaviorTestKit[ShortLink.Command, ShortLink.Event, ShortLink.Snapshot](
-    system, ShortLink(shortLinkId, ConfigurationProvider.testConfig.underlying)
+    system, ShortLink(shortLinkId, shardMock, ConfigurationProvider.testConfig.underlying)
   )
 
   private val shortLinkId2 = "testId-2"
@@ -98,7 +101,7 @@ class ShortLinkSpec extends ScalaTestWithActorTestKit(ActorTestKit("application"
      */
     "reply with NotFound if empty ShortLink is asked" in {
       Given("empty ShortLink actor")
-      val shortLink2 = spawn(ShortLink(shortLinkId2, ConfigurationProvider.testConfig.underlying))
+      val shortLink2 = spawn(ShortLink(shortLinkId2, shardMock, ConfigurationProvider.testConfig.underlying))
       //do nothing - defined above (val shortLink2)
 
       Given("empty User-Agent and X-Forwarder-For values")

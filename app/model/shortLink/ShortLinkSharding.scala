@@ -14,7 +14,7 @@ class ShortLinkSharding @Inject()(actorSystem: ActorSystem, config: Config) {
   private val entityTypeKey: EntityTypeKey[ShortLink.Command] = ShortLink.TypeKey
 
   sharding.init(Entity(entityTypeKey) { entityContext =>
-    ShortLink(entityContext.entityId, config)
+    ShortLink(entityContext.entityId, entityContext.shard, config)
   })
 
   def entityRefFor(id: String): EntityRef[ShortLink.Command] = {
