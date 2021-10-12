@@ -1,7 +1,10 @@
 package projection.shortLink
 
 import akka.actor.ActorSystem
+import akka.actor.typed.SupervisorStrategy
+import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
+import akka.cluster.typed.{ClusterSingleton, SingletonActor}
 import akka.persistence.jdbc.query.scaladsl.JdbcReadJournal
 import akka.persistence.query.Offset
 import akka.projection.eventsourced.EventEnvelope
@@ -16,6 +19,7 @@ import projection.JdbcSessionFactory
 import projection.shortLink.ShortLinkProjection.EventHandler
 
 import javax.inject.{Inject, Singleton}
+import scala.concurrent.duration._
 
 @Singleton
 class ShortLinkProjection @Inject()(actorSystem: ActorSystem, jdbcSessionFactory: JdbcSessionFactory){
@@ -31,7 +35,10 @@ class ShortLinkProjection @Inject()(actorSystem: ActorSystem, jdbcSessionFactory
         () => jdbcSessionFactory.create(),
         handler = () => new EventHandler())(actorSystem.toTyped)
 
-  actorSystem.spawn(ProjectionBehavior(projection), projection.projectionId.id)
+  ClusterSingleton(actorSystem.toTyped).init(SingletonActor(
+    Behaviors.supervise(ProjectionBehavior(projection)).onFailure(SupervisorStrategy.restartWithBackoff(1.second, 10.seconds, 0.2)),
+    projection.projectionId.id
+  ))
 }
 
 object ShortLinkProjection {
