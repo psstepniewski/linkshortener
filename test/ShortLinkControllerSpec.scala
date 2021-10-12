@@ -71,7 +71,7 @@ class ShortLinkControllerSpec extends PlaySpec with OneAppPerSuiteWithComponents
       Given("controller which always generate the same shortLinkId")
       // nothing - controller is declared above
 
-      When("postShortLinks was already requested")
+      When("postShortLinks is requested")
       route(app, request)
       When("postShortLinks is requested again")
       val result = route(app, request).get

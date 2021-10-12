@@ -28,7 +28,7 @@ class ShortLinkController @Inject()(idGenerator: IdGenerator, shortLinkSharding:
     def iterate(originalLinkUrl: String, tags: Set[String], tryNumber: Int = 1, maxTriesNumber: Int = 3): Future[Result] = {
       logger.info(s"ShortLinkController#postShortLinks: create new ShortLink[tryNumber=$tryNumber, maxTriesNumber=$maxTriesNumber] for OriginalLink[url=$originalLinkUrl].")
       if(tryNumber > maxTriesNumber) {
-        logger.warn(s"ShortLinkController#postShortLinks: tryNumber[$tryNumber] >= maxTriesNumber[$maxTriesNumber]. Returning 500.")
+        logger.warn(s"ShortLinkController#postShortLinks: tryNumber[$tryNumber] > maxTriesNumber[$maxTriesNumber]. Returning 500.")
         Future.successful(InternalServerError)
       }
       else {
