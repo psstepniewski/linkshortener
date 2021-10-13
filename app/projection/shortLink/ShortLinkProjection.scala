@@ -33,7 +33,9 @@ class ShortLinkProjection @Inject()(actorSystem: ActorSystem, jdbcSessionFactory
         projectionId = ProjectionId(ShortLink.TypeKey.name, "postgres"),
         sourceProvider,
         () => jdbcSessionFactory.create(),
-        handler = () => new EventHandler())(actorSystem.toTyped)
+        handler = () => new EventHandler()
+    )(actorSystem.toTyped)
+    .withRestartBackoff(1.seconds, 10.seconds, 0.2)
 
   ClusterSingleton(actorSystem.toTyped).init(SingletonActor(
     Behaviors.supervise(ProjectionBehavior(projection)).onFailure(SupervisorStrategy.restartWithBackoff(1.second, 10.seconds, 0.2)),
